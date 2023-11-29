@@ -7,6 +7,7 @@ ENV TOOLS_HOME=/usr/src/tools
 ENV BUNDLE_IGNORE_MESSAGES="true"
 WORKDIR $APP_HOME
 
+COPY /automation/ $APP_HOME/lib/metasploit/framework/
 COPY Gemfile* metasploit-framework.gemspec Rakefile $APP_HOME/
 COPY lib/metasploit/framework/version.rb $APP_HOME/lib/metasploit/framework/version.rb
 COPY lib/metasploit/framework/rails_version_constraint.rb $APP_HOME/lib/metasploit/framework/rails_version_constraint.rb
