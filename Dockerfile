@@ -1,4 +1,4 @@
-FROM ruby:3.0.5-alpine3.15 AS builder
+FROM ruby:3.1.4-alpine3.18 AS builder
 LABEL maintainer="Rapid7"
 
 ARG BUNDLER_CONFIG_ARGS="set clean 'true' set no-cache 'true' set system 'true' set without 'development test coverage'"
@@ -7,7 +7,6 @@ ENV TOOLS_HOME=/usr/src/tools
 ENV BUNDLE_IGNORE_MESSAGES="true"
 WORKDIR $APP_HOME
 
-COPY /automation/ $APP_HOME/lib/metasploit/framework/
 COPY Gemfile* metasploit-framework.gemspec Rakefile $APP_HOME/
 COPY lib/metasploit/framework/version.rb $APP_HOME/lib/metasploit/framework/version.rb
 COPY lib/metasploit/framework/rails_version_constraint.rb $APP_HOME/lib/metasploit/framework/rails_version_constraint.rb
@@ -50,7 +49,7 @@ RUN mkdir -p $TOOLS_HOME/bin && \
     cd go/src && \
     ./make.bash
 
-FROM ruby:3.0.5-alpine3.15
+FROM ruby:3.1.4-alpine3.18
 LABEL maintainer="Rapid7"
 
 ENV APP_HOME=/usr/src/metasploit-framework
