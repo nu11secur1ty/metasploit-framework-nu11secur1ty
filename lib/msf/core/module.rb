@@ -48,6 +48,7 @@ module Msf
     include Msf::Module::Author
     include Msf::Module::Compatibility
     include Msf::Module::DataStore
+    include Msf::Module::Failure
     include Msf::Module::FullName
     include Msf::Module::ModuleInfo
     include Msf::Module::ModuleStore
@@ -113,7 +114,8 @@ module Msf
       @module_info_copy = info.dup
 
       self.module_info = info
-      generate_uuid
+      # Initialize UUID for RPC compatibility
+      uuid
 
       set_defaults
 
@@ -136,7 +138,7 @@ module Msf
       self.options.add_evasion_options(info['EvasionOptions'], self.class)
 
       # Create and initialize the data store for this module
-      self.datastore = ModuleDataStore.new(self)
+      self.datastore = Msf::ModuleDataStore.new(self)
 
       # Import default options into the datastore
       import_defaults
@@ -333,6 +335,10 @@ module Msf
       false
     end
 
+    def default_options
+      self.module_info['DefaultOptions']
+    end
+
     def required_cred_options
       @required_cred_options ||= lambda {
         self.options.select { |name, opt|
@@ -454,6 +460,8 @@ module Msf
     attr_writer   :platform, :references # :nodoc:
     attr_writer   :privileged # :nodoc:
     attr_writer   :license # :nodoc:
+
+
 
   end
 

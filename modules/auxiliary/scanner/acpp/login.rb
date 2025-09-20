@@ -14,33 +14,36 @@ class MetasploitModule < Msf::Auxiliary
 
   def initialize
     super(
-      'Name'        => 'Apple Airport ACPP Authentication Scanner',
-      'Description' => %q(
+      'Name' => 'Apple Airport ACPP Authentication Scanner',
+      'Description' => %q{
         This module attempts to authenticate to an Apple Airport using its
         proprietary and largely undocumented protocol known only as ACPP.
-      ),
-      'Author'      =>
-        [
-          'Jon Hart <jon_hart[at]rapid7.com>'
-        ],
-      'References'     =>
-        [
-          %w(CVE 2003-0270) # Fixed XOR key used to encrypt password
-        ],
-      'License'     => MSF_LICENSE
+      },
+      'Author' => [
+        'Jon Hart <jon_hart[at]rapid7.com>'
+      ],
+      'References' => [
+        %w[CVE 2003-0270] # Fixed XOR key used to encrypt password
+      ],
+      'License' => MSF_LICENSE,
+      'Notes' => {
+        'Stability' => [CRASH_SAFE],
+        'SideEffects' => [IOC_IN_LOGS],
+        'Reliability' => []
+      }
     )
 
     register_options(
       [
         Opt::RPORT(Rex::Proto::ACPP::DEFAULT_PORT)
-      ])
+      ]
+    )
 
     deregister_options(
       # there is no username, so remove all of these options
       'DB_ALL_USERS',
       'DB_ALL_CREDS',
       'DB_SKIP_EXISTING',
-      'PASSWORD_SPRAY',
       'USERNAME',
       'USERPASS_FILE',
       'USER_FILE',
@@ -61,23 +64,25 @@ class MetasploitModule < Msf::Auxiliary
     cred_collection = prepend_db_passwords(cred_collection)
 
     scanner = Metasploit::Framework::LoginScanner::ACPP.new(
-      host: ip,
-      port: rport,
-      proxies: datastore['PROXIES'],
-      cred_details: cred_collection,
-      stop_on_success: datastore['STOP_ON_SUCCESS'],
-      bruteforce_speed: datastore['BRUTEFORCE_SPEED'],
-      connection_timeout: datastore['ConnectTimeout'],
-      max_send_size: datastore['TCP::max_send_size'],
-      send_delay: datastore['TCP::send_delay'],
-      framework: framework,
-      framework_module: self,
-      ssl: datastore['SSL'],
-      ssl_version: datastore['SSLVersion'],
-      ssl_verify_mode: datastore['SSLVerifyMode'],
-      ssl_cipher: datastore['SSLCipher'],
-      local_port: datastore['CPORT'],
-      local_host: datastore['CHOST']
+      configure_login_scanner(
+        host: ip,
+        port: rport,
+        proxies: datastore['PROXIES'],
+        cred_details: cred_collection,
+        stop_on_success: datastore['STOP_ON_SUCCESS'],
+        bruteforce_speed: datastore['BRUTEFORCE_SPEED'],
+        connection_timeout: datastore['ConnectTimeout'],
+        max_send_size: datastore['TCP::max_send_size'],
+        send_delay: datastore['TCP::send_delay'],
+        framework: framework,
+        framework_module: self,
+        ssl: datastore['SSL'],
+        ssl_version: datastore['SSLVersion'],
+        ssl_verify_mode: datastore['SSLVerifyMode'],
+        ssl_cipher: datastore['SSLCipher'],
+        local_port: datastore['CPORT'],
+        local_host: datastore['CHOST']
+      )
     )
 
     scanner.scan! do |result|

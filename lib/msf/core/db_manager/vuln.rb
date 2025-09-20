@@ -44,8 +44,8 @@ module Msf::DBManager::Vuln
     other_vulns.empty? ? nil : other_vulns.first
   end
 
-  def find_vuln_by_refs(refs, host, service=nil)
-    ref_ids = refs.find_all { |ref| ref.name.starts_with? 'CVE-'}
+  def find_vuln_by_refs(refs, host, service = nil, cve_only = true)
+    ref_ids = cve_only ? refs.find_all { |ref| ref.name.starts_with? 'CVE-'} : refs
     relation = host.vulns.joins(:refs)
     if !service.try(:id).nil?
       return relation.where(service_id: service.try(:id), refs: { id: ref_ids}).first
@@ -84,7 +84,8 @@ module Msf::DBManager::Vuln
   # opts can contain
   # +:info+::   a human readable description of the vuln, free-form text
   # +:refs+::   an array of Ref objects or string names of references
-  # +:details:: a hash with :key pointed to a find criteria hash and the rest containing VulnDetail fields
+  # +:details+:: a hash with :key pointed to a find criteria hash and the rest containing VulnDetail fields
+  # +:sname+:: the name of the service this vulnerability relates to, used to associate it or create it.
   #
   def report_vuln(opts)
     return if not active
@@ -150,6 +151,7 @@ module Msf::DBManager::Vuln
         case opts[:proto].to_s.downcase # Catch incorrect usages, as in report_note
         when 'tcp','udp'
           proto = opts[:proto]
+          sname = opts[:sname]
         when 'dns','snmp','dhcp'
           proto = 'udp'
           sname = opts[:proto]
@@ -158,7 +160,9 @@ module Msf::DBManager::Vuln
           sname = opts[:proto]
         end
 
-        service = host.services.where(port: opts[:port].to_i, proto: proto).first_or_create
+        services = host.services.where(port: opts[:port].to_i, proto: proto)
+        services = services.where(name: sname) if sname.present?
+        service = services.first_or_create
       end
 
       # Try to find an existing vulnerability with the same service & references
@@ -219,6 +223,10 @@ module Msf::DBManager::Vuln
     # Set the exploited_at value if provided
     vuln.exploited_at = exploited_at if exploited_at
 
+    # Vuln origin ignored, rationale:
+    #   https://github.com/rapid7/metasploit-framework/pull/19817#issuecomment-2615656036
+    # vuln.origin = opts[:origin] if opts[:origin]
+
     # Merge the references
     if rids
       vuln.refs << (rids - vuln.refs)
@@ -226,7 +234,7 @@ module Msf::DBManager::Vuln
 
     # Finalize
     if vuln.changed?
-      msf_import_timestamps(opts,vuln)
+      msf_assign_timestamps(opts, vuln)
       vuln.save!
     end
 

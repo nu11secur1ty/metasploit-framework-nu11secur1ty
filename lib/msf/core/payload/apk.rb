@@ -240,8 +240,10 @@ class Msf::Payload::Apk
     check_apktool_output_for_exceptions(check_apktool)
 
     apktool_version = Rex::Version.new(check_apktool.split("\n").first.strip)
-    min_required_apktool_version = Rex::Version.new('2.7.0')
+    min_required_apktool_version = Rex::Version.new('2.9.2')
     unless apktool_version >= min_required_apktool_version
+      # technically MSF supports 2.7.0+ but versions < 2.9.2 are vulnerable to CVE-2024-21633
+      # see: https://github.com/iBotPeaches/Apktool/security/advisories/GHSA-2hqv-2xv4-5h5w
       raise RuntimeError, "apktool version #{apktool_version} not supported, please download at least version #{min_required_apktool_version}."
     end
 
@@ -331,7 +333,7 @@ class Msf::Payload::Apk
     classes['Payload'] = Rex::Text::rand_text_alpha_lower(5).capitalize
     classes['MainService'] = Rex::Text::rand_text_alpha_lower(5).capitalize
     classes['MainBroadcastReceiver'] = Rex::Text::rand_text_alpha_lower(5).capitalize
-    package_slash = package.gsub(/\./, "/")
+    package_slash = package.gsub('.', "/")
 
     print_status "Adding payload as package #{package}\n"
     payload_files = Dir.glob("#{tempdir}/payload/smali/com/metasploit/stage/*.smali")
@@ -348,7 +350,7 @@ class Msf::Payload::Apk
         end
         smali.gsub!(/com\/metasploit\/stage\/#{oldclass}/, package_slash + "/" + newclass)
       end
-      smali.gsub!(/com\/metasploit\/stage/, package_slash)
+      smali.gsub!('com/metasploit/stage', package_slash)
       newfilename = "#{payload_dir}#{smali_class}"
       File.open(newfilename, "wb") {|file| file.puts smali }
     end

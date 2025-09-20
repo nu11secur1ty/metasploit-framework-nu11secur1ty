@@ -50,7 +50,8 @@ class MetasploitModule < Msf::Post
         ],
         'References' => [
           [ 'URL', 'https://github.com/GhostPack/Rubeus' ],
-          [ 'URL', 'https://github.com/wavvs/nanorobeus' ]
+          [ 'URL', 'https://github.com/wavvs/nanorobeus' ],
+          [ 'ATT&CK', Mitre::Attack::Technique::T1003_004_LSA_SECRETS ]
         ],
         'Platform' => ['win'],
         'SessionTypes' => %w[meterpreter],
@@ -61,7 +62,7 @@ class MetasploitModule < Msf::Post
         ],
         'DefaultAction' => 'DUMP_TICKETS',
         'Notes' => {
-          'Stability' => [],
+          'Stability' => [CRASH_SAFE],
           'Reliability' => [],
           'SideEffects' => []
         },

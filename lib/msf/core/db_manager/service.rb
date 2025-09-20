@@ -48,6 +48,7 @@ module Msf::DBManager::Service
   # +:info+:: Detailed information about the service such as name and version information
   # +:state+:: The current listening state of the service (one of: open, closed, filtered, unknown)
   #
+  # @return [Mdm::Service,nil]
   def report_service(opts)
     return if !active
   ::ApplicationRecord.connection_pool.with_connection { |conn|
@@ -81,16 +82,6 @@ module Msf::DBManager::Service
       return nil
     end
 
-    ret  = {}
-=begin
-    host = get_host(:workspace => wspace, :address => addr)
-    if host
-      host.updated_at = host.created_at
-      host.state      = HostState::Alive
-      host.save!
-    end
-=end
-
     proto = opts[:proto] || Msf::DBManager::DEFAULT_SERVICE_PROTO
 
     service = host.services.where(port: opts[:port].to_i, proto: proto).first_or_initialize
@@ -120,18 +111,17 @@ module Msf::DBManager::Service
     end
 
     if (service and service.changed?)
-      msf_import_timestamps(opts,service)
       service.save!
     end
 
     if opts[:task]
-      Mdm::TaskService.create(
+      Mdm::TaskService.where(
           :task => opts[:task],
           :service => service
-      )
+      ).first_or_create
     end
 
-    ret[:service] = service
+    service
   }
   end
 

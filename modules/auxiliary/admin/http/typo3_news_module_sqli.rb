@@ -40,7 +40,12 @@ class MetasploitModule < Msf::Auxiliary
         'Privileged' => false,
         'Platform' => ['php'],
         'Arch' => ARCH_PHP,
-        'DisclosureDate' => '2017-04-06'
+        'DisclosureDate' => '2017-04-06',
+        'Notes' => {
+          'Stability' => [CRASH_SAFE],
+          'SideEffects' => [IOC_IN_LOGS],
+          'Reliability' => []
+        }
       )
     )
 
@@ -83,7 +88,7 @@ class MetasploitModule < Msf::Auxiliary
   end
 
   def blind(field, table, condition, charset, digit_charset, patterns = {})
-    # Adding 9 so that the result has two digits, If the lenght is superior to 100-9 it won't work
+    # Adding 9 so that the result has two digits, If the length is superior to 100-9 it won't work
     offset = 9
     size = blind_size("length(#{field})+#{offset}",
                       table,
@@ -173,7 +178,7 @@ class MetasploitModule < Msf::Auxiliary
     end
 
     if pattern1.to_s.eql?('') || pattern2.to_s.eql?('')
-      print_status("Couldn't determine Pattern1 and Pattern2 automatically, switching to user speficied values...")
+      print_status("Couldn't determine Pattern1 and Pattern2 automatically, switching to user specified values...")
       pattern1 = datastore['PATTERN1']
       pattern2 = datastore['PATTERN2']
     end

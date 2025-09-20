@@ -17,10 +17,10 @@ module Msf
         #   stage since the command itself has been completed.
         def tab_complete_datastore_names(datastore, _str, _words)
           keys = (
-            Msf::DataStoreWithFallbacks::GLOBAL_KEYS +
+            Msf::DataStore::GLOBAL_KEYS +
               datastore.keys
           )
-          keys.concat(datastore.options.values.flat_map(&:fallbacks)) if datastore.is_a?(Msf::DataStoreWithFallbacks)
+          keys.concat(datastore.options.values.flat_map(&:fallbacks)) if datastore.is_a?(Msf::DataStore)
           keys.uniq! { |key| key.downcase }
           keys
         end
@@ -78,7 +78,7 @@ module Msf
             return res
           end
 
-          mod.options.sorted.each do |e|
+          mod.options.each do |e|
             name, _opt = e
             res << name
           end
@@ -101,7 +101,7 @@ module Msf
           if ((mod.exploit? || mod.evasion?) && mod.datastore['PAYLOAD'])
             p = framework.payloads.create(mod.datastore['PAYLOAD'])
             if p
-              p.options.sorted.each do |e|
+              p.options.each do |e|
                 name, _opt = e
                 res << name
               end
@@ -119,7 +119,8 @@ module Msf
               end
             end
           end
-          return res
+
+          return res.sort
         end
 
         #
@@ -305,14 +306,14 @@ module Msf
         # Provide valid nops options for the current exploit
         #
         def option_values_nops
-          framework.nops.map { |refname, _mod| refname }
+          framework.nops.module_refnames
         end
 
         #
         # Provide valid encoders options for the current exploit or payload
         #
         def option_values_encoders
-          framework.encoders.map { |refname, _mod| refname }
+          framework.encoders.module_refnames
         end
 
         #

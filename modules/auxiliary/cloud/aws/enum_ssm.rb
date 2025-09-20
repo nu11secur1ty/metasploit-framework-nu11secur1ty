@@ -10,6 +10,9 @@ class MetasploitModule < Msf::Auxiliary
   include Rex::Proto::Http::WebSocket::AmazonSsm
   include Msf::Auxiliary::Report
   include Msf::Auxiliary::CommandShell
+  include Msf::Sessions::CreateSessionOptions
+  include Msf::Auxiliary::ReportSummary
+
   def initialize(info = {})
     super(
       update_info(
@@ -24,7 +27,7 @@ class MetasploitModule < Msf::Auxiliary
           This module provides not only the API enumeration identifying EC2
           instances accessible via SSM with given credentials, but enables
           session initiation for all identified targets (without requiring
-          target-level credentials) using the CreateSession mixin option.
+          target-level credentials) using the CreateSession datastore option.
           The module also provides an EC2 ID filter and a limiting throttle
           to prevent session stampedes or expensive messes.
         },
@@ -106,7 +109,7 @@ class MetasploitModule < Msf::Auxiliary
       report_note(
         host: ssm_host['IpAddress'],
         type: ssm_host['AgentType'],
-        data: ssm_host['AgentVersion']
+        data: { agent_version: ssm_host['AgentVersion'] }
       )
       vprint_good("Found AWS SSM host #{ssm_host['InstanceId']} (#{ssm_host['ComputerName']}) - #{ssm_host['IpAddress']}")
       next unless datastore['CreateSession']

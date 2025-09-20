@@ -194,6 +194,21 @@ require 'digest/sha1'
       end
       # XXX: Add remaining MIPSLE systems here
     end
+
+    if arch.index(ARCH_RISCV32LE)
+      if plat.index(Msf::Module::Platform::Linux)
+        return to_linux_riscv32le_elf(framework, code)
+      end
+      # TODO: Add remaining RISCV32LE systems here
+    end
+
+    if arch.index(ARCH_RISCV64LE)
+      if plat.index(Msf::Module::Platform::Linux)
+        return to_linux_riscv64le_elf(framework, code)
+      end
+      # TODO: Add remaining RISCV64LE systems here
+    end
+
     nil
   end
 
@@ -233,7 +248,7 @@ require 'digest/sha1'
       end
 
       # use
-      self.to_win32pe_exe_sub(framework, code, opts)
+      return self.to_win32pe_exe_sub(framework, code, opts)
     end
 
     # Allow the user to specify their own EXE template
@@ -521,6 +536,27 @@ require 'digest/sha1'
     pushes
   end
 
+  # Converts a raw AArch64 payload into a PE executable.
+  #
+  # @param framework [Msf::Framework] The framework instance.
+  # @param code [String] The raw AArch64 shellcode.
+  # @param opts [Hash] The options hash.
+  # @option opts [String] :template The path to a custom PE template.
+  # @return [String] The generated PE executable as a binary string.
+  def self.to_winaarch64pe(framework, code, opts = {})
+    # Use the standard template if not specified by the user.
+    # This helper finds the full path and stores it in opts[:template].
+    set_template_default(opts, 'template_aarch64_windows.exe')
+
+    # Read the template directly from the path now stored in the options.
+    pe = File.read(opts[:template], mode: 'rb')
+
+    # Find the tag and inject the payload
+    bo = find_payload_tag(pe, 'Invalid Windows AArch64 template: missing "PAYLOAD:" tag')
+    pe[bo, code.length] = code.dup
+    pe
+  end
+
   # self.exe_sub_method
   #
   # @param  code [String]
@@ -594,7 +630,6 @@ require 'digest/sha1'
     opts[:exe_type] = :exe_sub
     exe_sub_method(code,opts)
   end
-
   # self.to_win64pe
   #
   # @param framework  [Msf::Framework]  The framework of you want to use
@@ -638,24 +673,10 @@ require 'digest/sha1'
   #
   # @return [String] Windows Service PE file
   def self.to_win32pe_service(framework, code, opts = {})
+    # Allow the user to specify their own service EXE template
     set_template_default(opts, "template_x86_windows_svc.exe")
-    if opts[:sub_method]
-      # Allow the user to specify their own service EXE template
-      opts[:exe_type] = :service_exe
-      return exe_sub_method(code,opts)
-    else
-      ENV['MSF_SERVICENAME'] = opts[:servicename]
-
-      opts[:framework] = framework
-      opts[:payload] = 'stdin'
-      opts[:encoder] = '@x86/service,'+(opts[:serviceencoder] || '')
-
-      # XXX This should not be required, it appears there is a dependency inversion
-      # See https://github.com/rapid7/metasploit-framework/pull/9851
-      venom_generator = Msf::PayloadGenerator.new(opts)
-      code_service = venom_generator.multiple_encode_payload(code)
-      return to_winpe_only(framework, code_service, opts)
-    end
+    opts[:exe_type] = :service_exe
+    exe_sub_method(code,opts)
   end
 
   # self.to_win64pe_service
@@ -1217,6 +1238,16 @@ require 'digest/sha1'
     to_exe_elf(framework, opts, "template_aarch64_linux.bin", code)
   end
 
+  # self.to_linux_ppc64_elf
+  #
+  # @param framework [Msf::Framework]
+  # @param code       [String]
+  # @param opts       [Hash]
+  # @option           [String] :template
+  # @return           [String] Returns an elf
+  def self.to_linux_ppc64_elf(framework, code, opts = {})
+    to_exe_elf(framework, opts, "template_ppc64_linux.bin", code, true)
+  end
   # self.to_linux_mipsle_elf
   # Little Endian
   # @param framework [Msf::Framework]
@@ -1237,6 +1268,50 @@ require 'digest/sha1'
   # @return           [String] Returns an elf
   def self.to_linux_mipsbe_elf(framework, code, opts = {})
     to_exe_elf(framework, opts, "template_mipsbe_linux.bin", code, true)
+  end
+
+  # Create a RISC-V 64-bit LE Linux ELF containing the payload provided in +code+
+  #
+  # @param framework [Msf::Framework]
+  # @param code       [String]
+  # @param opts       [Hash]
+  # @option           [String] :template
+  # @return           [String] Returns an elf
+  def self.to_linux_riscv64le_elf(framework, code, opts = {})
+    to_exe_elf(framework, opts, "template_riscv64le_linux.bin", code)
+  end
+
+  # Create a RISC-V 64-bit LE Linux ELF_DYN containing the payload provided in +code+
+  #
+  # @param framework [Msf::Framework]
+  # @param code       [String]
+  # @param opts       [Hash]
+  # @option           [String] :template
+  # @return           [String] Returns an elf
+  def self.to_linux_riscv64le_elf_dll(framework, code, opts = {})
+    to_exe_elf(framework, opts, "template_riscv64le_linux_dll.bin", code)
+  end
+
+  # Create a RISC-V 32-bit LE Linux ELF containing the payload provided in +code+
+  #
+  # @param framework [Msf::Framework]
+  # @param code       [String]
+  # @param opts       [Hash]
+  # @option           [String] :template
+  # @return           [String] Returns an elf
+  def self.to_linux_riscv32le_elf(framework, code, opts = {})
+    to_exe_elf(framework, opts, "template_riscv32le_linux.bin", code)
+  end
+
+  # Create a RISC-V 32-bit LE Linux ELF_DYN containing the payload provided in +code+
+  #
+  # @param framework [Msf::Framework]
+  # @param code       [String]
+  # @param opts       [Hash]
+  # @option           [String] :template
+  # @return           [String] Returns an elf
+  def self.to_linux_riscv32le_elf_dll(framework, code, opts = {})
+    to_exe_elf(framework, opts, "template_riscv32le_linux_dll.bin", code)
   end
 
   # self.to_exe_vba
@@ -1658,8 +1733,8 @@ require 'digest/sha1'
 </servlet>
 </web-app>
 }
-    web_xml.gsub!(/NAME/, app_name)
-    web_xml.gsub!(/PAYLOAD/, jsp_name)
+    web_xml.gsub!('NAME', app_name)
+    web_xml.gsub!('PAYLOAD', jsp_name)
 
     zip = Rex::Zip::Archive.new
     zip.add_file('META-INF/', '', meta_inf)
@@ -1777,15 +1852,15 @@ require 'digest/sha1'
     ; Note: Execution is not expected to (successfully) continue past this block
 
     exitfunk:
-      mov ebx, 0x0A2A1DE0    ; The EXITFUNK as specified by user...
-      push 0x9DBD95A6        ; hash( "kernel32.dll", "GetVersion" )
+      mov ebx, #{Rex::Text.block_api_hash('kernel32.dll', 'ExitThread')}    ; The EXITFUNK as specified by user...
+      push #{Rex::Text.block_api_hash('kernel32.dll', 'GetVersion')}        ; hash( "kernel32.dll", "GetVersion" )
       mov eax, ebp
       call eax               ; GetVersion(); (AL will = major version and AH will = minor version)
       cmp al, byte 6         ; If we are not running on Windows Vista, 2008 or 7
       jl goodbye             ; Then just call the exit function...
       cmp bl, 0xE0           ; If we are trying a call to kernel32.dll!ExitThread on Windows Vista, 2008 or 7...
       jne goodbye      ;
-      mov ebx, 0x6F721347    ; Then we substitute the EXITFUNK to that of ntdll.dll!RtlExitUserThread
+      mov ebx, #{Rex::Text.block_api_hash('ntdll.dll', 'RtlExitUserThread')}    ; Then we substitute the EXITFUNK to that of ntdll.dll!RtlExitUserThread
     goodbye:                 ; We now perform the actual call to the exit function
       push byte 0            ; push the exit function parameter
       push ebx               ; push the hash of the exit function
@@ -1808,7 +1883,7 @@ require 'digest/sha1'
       push 0x1000            ; MEM_COMMIT
       push esi               ; Push the length value of the wrapped code block
       push byte 0            ; NULL as we dont care where the allocation is.
-      push 0xE553A458        ; hash( "kernel32.dll", "VirtualAlloc" )
+      push #{Rex::Text.block_api_hash('kernel32.dll', 'VirtualAlloc')}        ; hash( "kernel32.dll", "VirtualAlloc" )
       call ebp               ; VirtualAlloc( NULL, dwLength, MEM_COMMIT, PAGE_EXECUTE_READWRITE );
 
       mov ebx, eax           ; Store allocated address in ebx
@@ -1887,14 +1962,14 @@ require 'digest/sha1'
     ; Note: Execution is not expected to (successfully) continue past this block
 
     exitfunk:
-      mov ebx, 0x0A2A1DE0    ; The EXITFUNK as specified by user...
-      push 0x9DBD95A6        ; hash( "kernel32.dll", "GetVersion" )
+      mov ebx, #{Rex::Text.block_api_hash('kernel32.dll', 'ExitThread')}    ; The EXITFUNK as specified by user...
+      push #{Rex::Text.block_api_hash('kernel32.dll', 'GetVersion')}        ; hash( "kernel32.dll", "GetVersion" )
       call ebp               ; GetVersion(); (AL will = major version and AH will = minor version)
       cmp al, byte 6         ; If we are not running on Windows Vista, 2008 or 7
       jl goodbye       ; Then just call the exit function...
       cmp bl, 0xE0           ; If we are trying a call to kernel32.dll!ExitThread on Windows Vista, 2008 or 7...
       jne goodbye      ;
-      mov ebx, 0x6F721347    ; Then we substitute the EXITFUNK to that of ntdll.dll!RtlExitUserThread
+      mov ebx, #{Rex::Text.block_api_hash('ntdll.dll', 'RtlExitUserThread')}    ; Then we substitute the EXITFUNK to that of ntdll.dll!RtlExitUserThread
     goodbye:                 ; We now perform the actual call to the exit function
       push byte 0            ; push the exit function parameter
       push ebx               ; push the hash of the exit function
@@ -1918,7 +1993,7 @@ require 'digest/sha1'
       push 0x1000            ; MEM_COMMIT
       push esi               ; Push the length value of the wrapped code block
       push byte 0            ; NULL as we dont care where the allocation is.
-      push 0xE553A458        ; hash( "kernel32.dll", "VirtualAlloc" )
+      push #{Rex::Text.block_api_hash('kernel32.dll', 'VirtualAlloc')}        ; hash( "kernel32.dll", "VirtualAlloc" )
       call ebp               ; VirtualAlloc( NULL, dwLength, MEM_COMMIT, PAGE_EXECUTE_READWRITE );
 
       mov ebx, eax           ; Store allocated address in ebx
@@ -1943,7 +2018,7 @@ require 'digest/sha1'
       push ebx               ; LPTHREAD_START_ROUTINE lpStartAddress (payload)
       push eax               ; SIZE_T dwStackSize (0 for default)
       push eax               ; LPSECURITY_ATTRIBUTES lpThreadAttributes (NULL)
-      push 0x160D6838        ; hash( "kernel32.dll", "CreateThread" )
+      push #{Rex::Text.block_api_hash('kernel32.dll', 'CreateThread')}        ; hash( "kernel32.dll", "CreateThread" )
       call ebp               ; Spawn payload thread
 
       pop eax                ; Skip
@@ -2068,6 +2143,8 @@ require 'digest/sha1'
         to_win32pe(framework, code, exeopts)
       when ARCH_X64
         to_win64pe(framework, code, exeopts)
+      when ARCH_AARCH64
+        to_winaarch64pe(framework, code, exeopts)
       end
     when 'exe-service'
       case arch
@@ -2119,12 +2196,18 @@ require 'digest/sha1'
           to_linux_x64_elf(framework, code, exeopts)
         when ARCH_AARCH64
           to_linux_aarch64_elf(framework, code, exeopts)
+        when ARCH_PPC64
+          to_linux_ppc64_elf(framework, code, exeopts)
         when ARCH_ARMLE
           to_linux_armle_elf(framework, code, exeopts)
         when ARCH_MIPSBE
           to_linux_mipsbe_elf(framework, code, exeopts)
         when ARCH_MIPSLE
           to_linux_mipsle_elf(framework, code, exeopts)
+        when ARCH_RISCV32LE
+          to_linux_riscv32le_elf(framework, code, exeopts)
+        when ARCH_RISCV64LE
+          to_linux_riscv64le_elf(framework, code, exeopts)
         end
       elsif plat && plat.index(Msf::Module::Platform::BSD)
         case arch
@@ -2153,6 +2236,10 @@ require 'digest/sha1'
           to_linux_armle_elf_dll(framework, code, exeopts)
         when ARCH_AARCH64
           to_linux_aarch64_elf_dll(framework, code, exeopts)
+        when ARCH_RISCV32LE
+          to_linux_riscv32le_elf_dll(framework, code, exeopts)
+        when ARCH_RISCV64LE
+          to_linux_riscv64le_elf_dll(framework, code, exeopts)
         end
       end
     when 'macho', 'osx-app'

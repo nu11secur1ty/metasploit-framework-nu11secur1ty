@@ -45,34 +45,30 @@ module DNS
     # Add record to cache, only when "running"
     #
     # @param record [Dnsruby::RR] Record to cache
-    def cache_record(record)
+    def cache_record(record, expire: true)
       return unless @monitor_thread
-      if record.is_a?(Dnsruby::RR) and
-      (!record.respond_to?(:address) or Rex::Socket.is_ip_addr?(record.address.to_s)) and
-      record.name.to_s.match(MATCH_HOSTNAME)
-        add(record, ::Time.now.to_i + record.ttl)
-      else
-        raise "Invalid record for cache entry - #{record.inspect}"
+
+      unless record.is_a?(Dnsruby::RR)
+        raise "Invalid record for cache entry (not an RR) - #{record.inspect}"
       end
+
+      unless (!record.respond_to?(:address) || Rex::Socket.is_ip_addr?(record.address.to_s))
+        raise "Invalid record for cache entry (no IP address) - #{record.inspect}"
+      end
+
+      unless record.name.to_s.match(MATCH_HOSTNAME)
+        raise "Invalid record for cache entry (invalid hostname) - #{record.inspect}"
+      end
+
+      add(record, expire ? (::Time.now.to_i + record.ttl) : 0)
     end
 
     #
-    # Add static record to cache
+    # Delete all cache entries, this is different from pruning because the
+    # record's expiration is ignored
     #
-    # @param name [String] Name of record
-    # @param address [String] Address of record
-    # @param type [Dnsruby::Types] Record type to add
-    # @param replace [TrueClass, FalseClass] Replace existing records
-    def add_static(name, address, type = Dnsruby::Types::A, replace = false)
-      if Rex::Socket.is_ip_addr?(address.to_s) and
-      ( name.to_s.match(MATCH_HOSTNAME) or name == '*')
-        find(name, type).each do |found|
-          delete(found)
-        end if replace
-        add(Dnsruby::RR.create(name: name, type: type, address: address),0)
-      else
-        raise "Invalid parameters for static entry - #{name}, #{address}, #{type}"
-      end
+    def flush
+      self.records.each {|rec, _| delete(rec)}
     end
 
     #

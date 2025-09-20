@@ -10,6 +10,8 @@ module Msf
 
 module Auxiliary::Scanner
 
+include Msf::Auxiliary::MultipleTargetHosts
+
 class AttemptFailed < Msf::Auxiliary::Failed
 end
 
@@ -31,20 +33,6 @@ def initialize(info = {})
 
 end
 
-def has_check?
-  respond_to?(:check_host)
-end
-
-def check
-  nmod = replicant
-  begin
-    nmod.check_host(datastore['RHOST'])
-  rescue NoMethodError
-    Exploit::CheckCode::Unsupported
-  end
-end
-
-
 def peer
   # IPv4 addr can be 16 chars + 1 for : and + 5 for port
   super.ljust(21)
@@ -56,6 +44,10 @@ end
 def run
   @show_progress = datastore['ShowProgress']
   @show_percent  = datastore['ShowProgressPercent'].to_i
+
+  if self.respond_to?(:session) && session
+    datastore['RHOSTS'] = session.address
+  end
 
   rhosts_walker  = Msf::RhostsWalker.new(self.datastore['RHOSTS'], self.datastore).to_enum
   @range_count   = rhosts_walker.count || 0
@@ -358,4 +350,3 @@ end
 
 end
 end
-

@@ -9,9 +9,11 @@ module Msf
   autoload :OptAddress, 'msf/core/opt_address'
   autoload :OptAddressLocal, 'msf/core/opt_address_local'
   autoload :OptAddressRange, 'msf/core/opt_address_range'
+  autoload :OptAddressRoot, 'msf/core/opt_address_routable'
   autoload :OptBool, 'msf/core/opt_bool'
   autoload :OptEnum, 'msf/core/opt_enum'
   autoload :OptInt, 'msf/core/opt_int'
+  autoload :OptIntRange, 'msf/core/opt_int_range'
   autoload :OptFloat, 'msf/core/opt_float'
   autoload :OptPath, 'msf/core/opt_path'
   autoload :OptPort, 'msf/core/opt_port'
@@ -48,9 +50,16 @@ module Msf
     # as necessary.
     #
     def initialize(opts = {})
-      self.sorted = []
+      self.groups = {}
 
       add_options(opts)
+    end
+
+    #
+    # Return the sorted array of options.
+    #
+    def sorted
+      self.sort
     end
 
     #
@@ -113,10 +122,6 @@ module Msf
     # @param [String] name the option name
     def remove_option(name)
       delete(name)
-      sorted.each_with_index { |e, idx|
-        sorted[idx] = nil if (e[0] == name)
-      }
-      sorted.delete(nil)
     end
 
     #
@@ -167,9 +172,6 @@ module Msf
       option.owner    = owner
 
       self.store(option.name, option)
-
-      # Re-calculate the sorted list
-      self.sorted = self.sort
     end
 
     #
@@ -196,7 +198,7 @@ module Msf
     def validate(datastore)
       # First mutate the datastore and normalize all valid values before validating permutations of RHOST/etc.
       each_pair do |name, option|
-        if option.valid?(datastore[name]) && (val = option.normalize(datastore[name])) != nil
+        if option.valid?(datastore[name], datastore: datastore) && (val = option.normalize(datastore[name])) != nil
           # This *will* result in a module that previously used the
           # global datastore to have its local datastore set, which
           # means that changing the global datastore and re-running
@@ -231,7 +233,7 @@ module Msf
 
         rhosts_walker.each do |datastore|
           each_pair do |name, option|
-            unless option.valid?(datastore[name])
+            unless option.valid?(datastore[name], datastore: datastore)
               error_options << name
               if rhosts_count > 1
                 error_reasons[name] << "for rhosts value #{datastore['UNPARSED_RHOSTS']}"
@@ -247,7 +249,7 @@ module Msf
       else
         error_options = []
         each_pair do |name, option|
-          unless option.valid?(datastore[name])
+          unless option.valid?(datastore[name], datastore: datastore)
             error_options << name
           end
         end
@@ -313,14 +315,26 @@ module Msf
       result.sort
     end
 
+    # Adds an option group to the container
     #
-    # The sorted array of options.
+    # @param option_group [Msf::OptionGroup]
+    def add_group(option_group)
+      groups[option_group.name] = option_group
+    end
+
+    # Removes an option group from the container by name
     #
-    attr_reader :sorted
+    # @param group_name [String]
+    def remove_group(group_name)
+      groups.delete(group_name)
+    end
+
+    # @return [Hash<String, Msf::OptionGroup>]
+    attr_reader :groups
 
     protected
 
-    attr_writer :sorted # :nodoc:
+    attr_writer :groups
   end
 
 end

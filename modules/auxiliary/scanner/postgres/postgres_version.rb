@@ -7,21 +7,29 @@ class MetasploitModule < Msf::Auxiliary
   include Msf::Exploit::Remote::Postgres
   include Msf::Auxiliary::Scanner
   include Msf::Auxiliary::Report
+  include Msf::OptionalSession::PostgreSQL
 
   # Creates an instance of this module.
   def initialize(info = {})
-    super(update_info(info,
-      'Name'           => 'PostgreSQL Version Probe',
-      'Description'    => %q{
-        Enumerates the version of PostgreSQL servers.
-      },
-      'Author'         => [ 'todb' ],
-      'License'        => MSF_LICENSE,
-      'References'     =>
-        [
+    super(
+      update_info(
+        info,
+        'Name' => 'PostgreSQL Version Probe',
+        'Description' => %q{
+          Enumerates the version of PostgreSQL servers.
+        },
+        'Author' => [ 'todb' ],
+        'License' => MSF_LICENSE,
+        'References' => [
           [ 'URL', 'https://www.postgresql.org/' ]
-        ]
-    ))
+        ],
+        'Notes' => {
+          'Reliability' => UNKNOWN_RELIABILITY,
+          'Stability' => UNKNOWN_STABILITY,
+          'SideEffects' => UNKNOWN_SIDE_EFFECTS
+        }
+      )
+    )
 
     register_options([ ]) # None needed.
 
@@ -31,19 +39,20 @@ class MetasploitModule < Msf::Auxiliary
   # Loops through each host in turn. Note the current IP address is both
   # ip and datastore['RHOST']
   def run_host(ip)
+    self.postgres_conn = session.client if session
     user = datastore['USERNAME']
     pass = postgres_password
-    do_fingerprint(user,pass,datastore['DATABASE'])
+    do_fingerprint(user, pass, datastore['DATABASE'])
   end
 
   # Alias for RHOST
   def rhost
-    datastore['RHOST']
+    postgres_conn&.peerhost || datastore['RHOST']
   end
 
   # Alias for RPORT
   def rport
-    datastore['RPORT']
+    postgres_conn&.peerport || datastore['RPORT']
   end
 
   def report_cred(opts)
@@ -72,18 +81,18 @@ class MetasploitModule < Msf::Auxiliary
     create_credential_login(login_data)
   end
 
-  def do_fingerprint(user=nil,pass=nil,database=nil)
+  def do_fingerprint(user = nil, pass = nil, database = nil)
     begin
       msg = "#{rhost}:#{rport} Postgres -"
       password = pass || postgres_password
-      vprint_status("#{msg} Trying username:'#{user}' with password:'#{password}' against #{rhost}:#{rport} on database '#{database}'")
+      vprint_status("#{msg} Trying username:'#{user}' with password:'#{password}' against #{rhost}:#{rport} on database '#{database}'") unless postgres_conn
       result = postgres_fingerprint(
         :db => database,
         :username => user,
         :password => password
       )
       if result[:auth]
-        vprint_good "#{rhost}:#{rport} Postgres - Logged in to '#{database}' with '#{user}':'#{password}'"
+        vprint_good "#{rhost}:#{rport} Postgres - Logged in to '#{database}' with '#{user}':'#{password}'" unless session
         print_status "#{rhost}:#{rport} Postgres - Version #{result[:auth]} (Post-Auth)"
       elsif result[:preauth]
         print_good "#{rhost}:#{rport} Postgres - Version #{result[:preauth]} (Pre-Auth)"
@@ -118,17 +127,15 @@ class MetasploitModule < Msf::Auxiliary
           :sname => 'postgres',
           :port => rport,
           :ntype => 'postgresql.fingerprint',
-          :data => "Unknown Pre-Auth fingerprint: #{result[:unknown]}"
+          :data => { :unknown_pre_auth_fingerprint => result[:unknown] }
         )
       end
 
       # Logout
-      postgres_logout
-
+      postgres_logout if self.postgres_conn && session.blank?
     rescue Rex::ConnectionError
       vprint_error "#{rhost}:#{rport} Connection Error: #{$!}"
       return :done
     end
-
   end
 end

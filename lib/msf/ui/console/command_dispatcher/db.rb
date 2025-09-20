@@ -19,6 +19,7 @@ class Db
   include Msf::Ui::Console::CommandDispatcher::Db::Common
   include Msf::Ui::Console::CommandDispatcher::Db::Analyze
   include Msf::Ui::Console::CommandDispatcher::Db::Klist
+  include Msf::Ui::Console::CommandDispatcher::Db::Certs
 
   DB_CONFIG_PATH = 'framework/database'
 
@@ -49,6 +50,7 @@ class Db
       "notes"         => "List all notes in the database",
       "loot"          => "List all loot in the database",
       "klist"         => "List Kerberos tickets in the database",
+      "certs"         => "List Pkcs12 certificate bundles in the database",
       "db_import"     => "Import a scan result file (filetype will be auto-detected)",
       "db_export"     => "Export a file containing the contents of the database",
       "db_nmap"       => "Executes nmap and records the output automatically",
@@ -345,7 +347,7 @@ class Db
 
       framework.db.hosts(address: host_search).each do |host|
         framework.db.update_host(host_data.merge(id: host.id))
-        framework.db.report_note(host: host.address, type: "host.#{attribute}", data: host_data[attribute])
+        framework.db.report_note(host: host.address, type: "host.#{attribute}", data: { :host_data => host_data[attribute] })
       end
     end
   end
@@ -423,15 +425,6 @@ class Db
     [ '-C', '--columns-until-restart' ] => [ true, 'Only show the given columns until the next restart (see list below)', '<columns>' ],
   )
 
-  def cmd_hosts_help(default_columns)
-    print_line "Usage: hosts [ options ] [addr1 addr2 ...]"
-    print_line
-    print @@hosts_opts.usage
-    print_line
-    print_line "Available columns: #{default_columns.join(", ")}"
-    print_line
-  end
-
   def cmd_hosts(*args)
     return unless active?
     onlyup = false
@@ -487,7 +480,12 @@ class Db
     @@hosts_opts.parse(args) do |opt, idx, val|
       case opt
       when '-h', '--help'
-        cmd_hosts_help(default_columns)
+        print_line "Usage: hosts [ options ] [addr1 addr2 ...]"
+        print_line
+        print @@hosts_opts.usage
+        print_line
+        print_line "Available columns: #{default_columns.join(", ")}"
+        print_line
         return
       when '-a', '--add'
         mode << :add
@@ -698,12 +696,12 @@ class Db
     []
   end
 
-  def cmd_services_help(default_columns)
+  def cmd_services_help
     print_line "Usage: services [-h] [-u] [-a] [-r <proto>] [-p <port1,port2>] [-s <name1,name2>] [-o <filename>] [addr1 addr2 ...]"
     print_line
     print @@services_opts.usage
     print_line
-    print_line "Available columns: #{default_columns.join(", ")}"
+    print_line "Available columns: #{@@services_columns.join(", ")}"
     print_line
   end
 
@@ -918,7 +916,7 @@ class Db
         search_term = val
         opts[:search_term] = search_term
       when '-h', '--help'
-        cmd_services_help(@@services_columns)
+        cmd_services_help
         return
       else
         # Anything that wasn't an option is a host to search for
@@ -1061,7 +1059,8 @@ class Db
     [ '-R', '--rhosts' ] => [ false, 'Set RHOSTS from the results of the search.' ],
     [ '-S', '--search' ] => [ true, 'Search string to filter by.', '<filter>' ],
     [ '-i', '--info' ] => [ false, 'Display vuln information.' ],
-    [ '-d', '--delete' ] => [ false, 'Delete vulnerabilities. Not officially supported.' ]
+    [ '-d', '--delete' ] => [ false, 'Delete vulnerabilities. Not officially supported.' ],
+    [ '-v', '--verbose' ] => [ false, 'Display additional information.' ]
   )
 
   def cmd_vulns(*args)
@@ -1075,6 +1074,7 @@ class Db
 
     search_term = nil
     show_info   = false
+    show_vuln_attempts = false
     set_rhosts  = false
     output_file = nil
     delete_count = 0
@@ -1113,6 +1113,8 @@ class Db
         search_term = val
       when '-i', '--info'
         show_info = true
+      when '-v', '--verbose'
+        show_vuln_attempts = true
       else
         # Anything that wasn't an option is a host to search for
         unless (arg_host_range(val, host_ranges))
@@ -1184,11 +1186,20 @@ class Db
     end
 
     if output_file
-      File.write(output_file, tbl.to_csv)
-      print_status("Wrote vulnerability information to #{output_file}")
+      if show_vuln_attempts
+        print_warning("Cannot output to a file when verbose mode is enabled. Please remove verbose flag and try again.")
+      else
+        File.write(output_file, tbl.to_csv)
+        print_status("Wrote vulnerability information to #{output_file}")
+      end
     else
       print_line
-      print_line(tbl.to_s)
+      if show_vuln_attempts
+        vulns_and_attempts = _format_vulns_and_vuln_attempts(vulns)
+        _print_vulns_and_attempts(vulns_and_attempts)
+      else
+        print_line(tbl.to_s)
+      end
     end
 
     # Finally, handle the case where the user wants the resulting list
@@ -1234,12 +1245,13 @@ class Db
   @@notes_opts = Rex::Parser::Arguments.new(
     [ '-a', '--add' ] => [ false, 'Add a note to the list of addresses, instead of listing.' ],
     [ '-d', '--delete' ] => [ false, 'Delete the notes instead of searching.' ],
-    [ '-n', '--note' ] => [ true, 'Set the data for a new note (only with -a).', '<note>' ],
-    [ '-t', '--type' ] => [ true, 'Search for a list of types, or set single type for add.', '<type1,type2>' ],
     [ '-h', '--help' ] => [ false, 'Show this help information.' ],
-    [ '-R', '--rhosts' ] => [ false, 'Set RHOSTS from the results of the search.' ],
-    [ '-o', '--output' ] => [ true, 'Save the notes to a csv file.', '<filename>' ],
+    [ '-n', '--note' ] => [ true, 'Set the data for a new note (only with -a).', '<note>' ],
     [ '-O', '--order' ] => [ true, 'Order rows by specified column number.', '<column id>' ],
+    [ '-o', '--output' ] => [ true, 'Save the notes to a csv file.', '<filename>' ],
+    [ '-R', '--rhosts' ] => [ false, 'Set RHOSTS from the results of the search.' ],
+    [ '-S', '--search' ] => [ true, 'Search string to filter by.', '<filter>' ],
+    [ '-t', '--type' ] => [ true, 'Search for a list of types, or set single type for add.', '<type1,type2>' ],
     [ '-u', '--update' ] => [ false, 'Update a note. Not officially supported.' ]
   )
 
@@ -1716,7 +1728,7 @@ class Db
     print_line "    Nikto XML"
     print_line "    Nmap XML"
     print_line "    OpenVAS Report"
-    print_line "    OpenVAS XML"
+    print_line "    OpenVAS XML (optional arguments -cert -dfn)"
     print_line "    Outpost24 XML"
     print_line "    Qualys Asset XML"
     print_line "    Qualys Scan XML"
@@ -1731,12 +1743,22 @@ class Db
   #
   def cmd_db_import(*args)
     return unless active?
+    openvas_cert = false
+    openvas_dfn = false
   ::ApplicationRecord.connection_pool.with_connection {
     if args.include?("-h") || ! (args && args.length > 0)
       cmd_db_import_help
       return
     end
+    if args.include?("-dfn")
+      openvas_dfn = true
+    end
+    if args.include?("-cert")
+      openvas_cert = true
+    end
+    options = {:openvas_dfn => openvas_dfn, :openvas_cert => openvas_cert}
     args.each { |glob|
+      next if (glob.include?("-cert") || glob.include?("-dfn"))
       files = ::Dir.glob(::File.expand_path(glob))
       if files.empty?
         print_error("No such file #{glob}")
@@ -1749,7 +1771,7 @@ class Db
         end
         begin
           warnings = 0
-          framework.db.import_file(:filename => filename) do |type,data|
+          framework.db.import_file(:filename => filename, :options => options) do |type,data|
             case type
             when :debug
               print_error("DEBUG: #{data.inspect}")
@@ -2338,6 +2360,50 @@ class Db
     end
   end
 
+  def _format_vulns_and_vuln_attempts(vulns)
+    vulns.map.with_index do |vuln, index|
+      vuln_formatted = <<~EOF.strip.indent(2)
+        #{index}. Vuln ID: #{vuln.id}
+           Timestamp: #{vuln.created_at}
+           Host: #{vuln.host.address}
+           Name: #{vuln.name}
+           References: #{vuln.refs.map {|r| r.name}.join(',')}
+           Information: #{_format_vuln_value(vuln.info)}
+      EOF
+
+      vuln_attempts_formatted = vuln.vuln_attempts.map.with_index do |vuln_attempt, i|
+        <<~EOF.strip.indent(5)
+          #{i}. ID: #{vuln_attempt.id}
+             Vuln ID: #{vuln_attempt.vuln_id}
+             Timestamp: #{vuln_attempt.attempted_at}
+             Exploit: #{vuln_attempt.exploited}
+             Fail reason: #{_format_vuln_value(vuln_attempt.fail_reason)}
+             Username: #{vuln_attempt.username}
+             Module: #{vuln_attempt.module}
+             Session ID: #{_format_vuln_value(vuln_attempt.session_id)}
+             Loot ID: #{_format_vuln_value(vuln_attempt.loot_id)}
+             Fail Detail: #{_format_vuln_value(vuln_attempt.fail_detail)}
+        EOF
+      end
+
+      { :vuln => vuln_formatted, :vuln_attempts => vuln_attempts_formatted }
+    end
+  end
+
+  def _print_vulns_and_attempts(vulns_and_attempts)
+    print_line("Vulnerabilities\n===============")
+    vulns_and_attempts.each do |vuln_and_attempt|
+      print_line(vuln_and_attempt[:vuln])
+      print_line("Vuln attempts:".indent(5))
+      vuln_and_attempt[:vuln_attempts].each do |attempt|
+        print_line(attempt)
+      end
+    end
+  end
+
+  def _format_vuln_value(s)
+    s.blank? ? s.inspect  : s.to_s
+  end
 end
 
 end end end end

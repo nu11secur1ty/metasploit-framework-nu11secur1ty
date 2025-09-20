@@ -25,7 +25,7 @@ class MetasploitModule < Msf::Post
         'Platform' => [ 'linux', 'win', 'osx', 'unix'],
         'SessionTypes' => [ 'meterpreter', 'shell', 'powershell' ],
         'Notes' => {
-          'Stability' => [],
+          'Stability' => [CRASH_SAFE],
           'Reliability' => [],
           'SideEffects' => []
         }
@@ -55,7 +55,7 @@ class MetasploitModule < Msf::Post
       ]
     )
     all_result.each do |item|
-      item.each do |_key, value|
+      item.each_value do |value|
         pw_tbl << value.values
         next if value['user'].empty? && value['password'].empty?
 

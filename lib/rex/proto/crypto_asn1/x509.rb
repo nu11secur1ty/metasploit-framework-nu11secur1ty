@@ -101,6 +101,14 @@ module Rex::Proto::CryptoAsn1::X509
     ]
   end
 
+  class SubjectPublicKeyInfo < RASN1::Model
+    sequence :subject_public_key_info,
+            explicit: 1, constructed: true, optional: true,
+             content: [model(:algorithm, Rex::Proto::CryptoAsn1::Cms::AlgorithmIdentifier),
+                       bit_string(:subject_public_key)
+    ]
+  end
+
   class BuiltinDomainDefinedAttribute < RASN1::Model
     sequence :BuiltinDomainDefinedAttribute, content: [
       printable_string(:type),
@@ -176,5 +184,26 @@ module Rex::Proto::CryptoAsn1::X509
 
   # https://datatracker.ietf.org/doc/html/rfc3280#section-4.2.1.7
   class SubjectAltName < GeneralNames
+  end
+
+  # https://datatracker.ietf.org/doc/html/rfc3280#section-4.2.1.5
+  class PolicyQualifierInfo < RASN1::Model
+    sequence :PolicyQualifierInfo, content: [
+      objectid(:policyQualifierId),
+      any(:qualifier)
+    ]
+  end
+
+  # https://datatracker.ietf.org/doc/html/rfc3280#section-4.2.1.5
+  class PolicyInformation < RASN1::Model
+    sequence :PolicyInformation, content: [
+      objectid(:policyIdentifier),
+      sequence_of(:policyQualifiers, PolicyQualifierInfo, optional: true)
+    ]
+  end
+
+  # https://datatracker.ietf.org/doc/html/rfc3280#section-4.2.1.5
+  class CertificatePolicies < RASN1::Model
+    sequence_of(:certificatePolicies, PolicyInformation)
   end
 end

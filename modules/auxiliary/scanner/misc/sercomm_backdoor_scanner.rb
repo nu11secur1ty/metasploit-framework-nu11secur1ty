@@ -8,39 +8,46 @@ class MetasploitModule < Msf::Auxiliary
   include Msf::Auxiliary::Scanner
   include Msf::Auxiliary::Report
 
-  def initialize(info={})
-    super(update_info(info,
-      'Name'        => 'SerComm Network Device Backdoor Detection',
-      'Description' => %q{
-        This module can identify SerComm manufactured network devices which
-        contain a backdoor, allowing command injection or account disclosure.
-      },
-      'Author'         =>
-        [
+  def initialize(info = {})
+    super(
+      update_info(
+        info,
+        'Name' => 'SerComm Network Device Backdoor Detection',
+        'Description' => %q{
+          This module can identify SerComm manufactured network devices which
+          contain a backdoor, allowing command injection or account disclosure.
+        },
+        'Author' => [
           'Eloi Vanderbeken <eloi.vanderbeken[at]gmail.com>', # Initial discovery, poc
           'Matt "hostess" Andreko <mandreko[at]accuvant.com>' # Msf module
         ],
-        'License'     => MSF_LICENSE,
-        'References'     =>
-        [
+        'License' => MSF_LICENSE,
+        'References' => [
           [ 'CVE', '2014-0659' ],
           [ 'OSVDB', '101653' ],
           [ 'URL', 'https://github.com/elvanderb/TCP-32764' ]
         ],
-        'DisclosureDate' => '2013-12-31' ))
+        'DisclosureDate' => '2013-12-31',
+        'Notes' => {
+          'Reliability' => UNKNOWN_RELIABILITY,
+          'Stability' => UNKNOWN_STABILITY,
+          'SideEffects' => UNKNOWN_SIDE_EFFECTS
+        }
+      )
+    )
 
     register_options([
-        Opt::RPORT(32764)
-      ])
+      Opt::RPORT(32764)
+    ])
   end
 
-  def do_report(ip, endianess)
+  def do_report(ip, endianness)
     report_vuln({
       :host => ip,
       :port => rport,
       :name => "SerComm Network Device Backdoor",
       :refs => self.references,
-      :info => "SerComm Network Device Backdoor found on a #{endianess} device"
+      :info => "SerComm Network Device Backdoor found on a #{endianness} device"
     })
   end
 

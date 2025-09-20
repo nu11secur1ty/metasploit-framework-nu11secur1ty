@@ -4,16 +4,16 @@
 # we must manually define the project root
 if ENV['MSF_ROOT']
   lib = File.realpath(File.expand_path('lib', ENV['MSF_ROOT']))
+  $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+  require 'metasploit/framework/version'
+  require 'metasploit/framework/rails_version_constraint'
+  require 'msf/util/helper'
 else
-  # have to use realpath as metasploit-framework is often loaded through a symlink and tools like Coverage and debuggers
-  # require realpaths.
-  lib = File.realpath(File.expand_path('../lib', __FILE__))
+  # XXX: Use explicit calls to require_relative to ensure that static analysis tools such as dependabot work
+  require_relative 'lib/metasploit/framework/version'
+  require_relative 'lib/metasploit/framework/rails_version_constraint'
+  require_relative 'lib/msf/util/helper'
 end
-
-$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'metasploit/framework/version'
-require 'metasploit/framework/rails_version_constraint'
-require 'msf/util/helper'
 
 Gem::Specification.new do |spec|
   spec.name          = 'metasploit-framework'
@@ -44,7 +44,7 @@ Gem::Specification.new do |spec|
   spec.test_files    = spec.files.grep(%r{^spec/})
   spec.require_paths = ["lib"]
 
-  spec.required_ruby_version = '>= 2.7'
+  spec.required_ruby_version = '>= 3.1'
 
   # Database support
   spec.add_runtime_dependency 'activerecord', *Metasploit::Framework::RailsVersionConstraint::RAILS_VERSION
@@ -62,19 +62,21 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'json'
   # Metasm compiler/decompiler/assembler
   spec.add_runtime_dependency 'metasm'
+  # Needed for aarch64 assembler support - as Metasm does not currently support Aarch64 fully
+  spec.add_runtime_dependency 'aarch64'
   # Metasploit::Concern hooks
   spec.add_runtime_dependency 'metasploit-concern'
   # Metasploit::Credential database models
   spec.add_runtime_dependency 'metasploit-credential'
   # Database models shared between framework and Pro.
-  spec.add_runtime_dependency 'metasploit_data_models'
+  spec.add_runtime_dependency 'metasploit_data_models', '>= 6.0.7'
   # Things that would normally be part of the database model, but which
   # are needed when there's no database
   spec.add_runtime_dependency 'metasploit-model'
   # Needed for Meterpreter
-  spec.add_runtime_dependency 'metasploit-payloads', '2.0.161'
+  spec.add_runtime_dependency 'metasploit-payloads', '2.0.221'
   # Needed for the next-generation POSIX Meterpreter
-  spec.add_runtime_dependency 'metasploit_payloads-mettle', '1.0.26'
+  spec.add_runtime_dependency 'metasploit_payloads-mettle', '1.0.45'
   # Needed by msfgui and other rpc components
   # Locked until build env can handle newer version. See: https://github.com/msgpack/msgpack-ruby/issues/334
   spec.add_runtime_dependency 'msgpack', '~> 1.6.0'
@@ -82,9 +84,8 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'network_interface'
   # NTLM authentication
   spec.add_runtime_dependency 'rubyntlm'
-  # Needed by anemone crawler
-  # Locked until build env can handle newer version due to native compile issue in 1.15.x
-  spec.add_runtime_dependency 'nokogiri', '~> 1.14.0'
+  # Needed by for XML parsing
+  spec.add_runtime_dependency 'nokogiri'
   # Needed by db.rb and Msf::Exploit::Capture
   spec.add_runtime_dependency 'packetfu'
   # For sniffer and raw socket modules
@@ -109,6 +110,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'ruby-mysql'
   spec.add_runtime_dependency 'thin'
   spec.add_runtime_dependency 'sinatra'
+  spec.add_runtime_dependency 'rack'
   spec.add_runtime_dependency 'warden'
   spec.add_runtime_dependency 'swagger-blocks'
   # Required for JSON-RPC client
@@ -127,8 +129,8 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'http-cookie'
   # Needed for some modules (polkit_auth_bypass.rb)
   spec.add_runtime_dependency 'unix-crypt'
-  # Needed for Kerberos structure parsing
-  spec.add_runtime_dependency 'rasn1'
+  # Needed for Kerberos structure parsing; Pinned to ensure a security review is performed on updates
+  spec.add_runtime_dependency 'rasn1', '0.14.0'
 
   #
   # File Parsing Libraries
@@ -147,11 +149,13 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'net-ssh'
   spec.add_runtime_dependency 'ed25519' # Adds ed25519 keys for net-ssh
   spec.add_runtime_dependency 'bcrypt_pbkdf'
-  spec.add_runtime_dependency 'ruby_smb', '~> 3.3.0'
+  spec.add_runtime_dependency 'ruby_smb', '~> 3.3.15'
   spec.add_runtime_dependency 'net-imap' # Used in Postgres auth for its SASL stringprep implementation
   spec.add_runtime_dependency 'net-ldap'
   spec.add_runtime_dependency 'net-smtp'
+  spec.add_runtime_dependency 'net-sftp'
   spec.add_runtime_dependency 'winrm'
+  spec.add_runtime_dependency 'ffi', '< 1.17.0'
 
   #
   # REX Libraries
@@ -198,7 +202,7 @@ Gem::Specification.new do |spec|
   # Needed by some modules
   spec.add_runtime_dependency 'rubyzip'
   # Needed for some post modules
-  spec.add_runtime_dependency 'sqlite3'
+  spec.add_runtime_dependency 'sqlite3', '1.7.3'
   # required for Time::TZInfo in ActiveSupport
   spec.add_runtime_dependency 'tzinfo'
   # Needed so that disk size output isn't horrible
@@ -216,7 +220,7 @@ Gem::Specification.new do |spec|
   # SSH server library with ed25519
   spec.add_runtime_dependency 'hrr_rb_ssh-ed25519'
   # Needed for irb internal command
-  spec.add_runtime_dependency 'irb', '~> 1.7.4'
+  spec.add_runtime_dependency 'irb'
 
   # AWS enumeration modules
   spec.add_runtime_dependency 'aws-sdk-s3'
@@ -231,7 +235,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'faye-websocket'
   spec.add_runtime_dependency 'eventmachine'
 
-  spec.add_runtime_dependency 'faraday'
+  spec.add_runtime_dependency 'faraday', '2.7.11'
   spec.add_runtime_dependency 'faraday-retry'
 
   # Required for windows terminal colors as of Ruby 3.0
@@ -244,4 +248,38 @@ Gem::Specification.new do |spec|
   # Do not use this to process untrusted PNG files! This is only to be used
   # to generate PNG files, not to parse untrusted PNG files.
   spec.add_runtime_dependency 'chunky_png'
+
+  # Needed for multiline REPL support for interactive SQL sessions
+  spec.add_runtime_dependency 'reline'
+
+  # Needed to parse sections of ELF files in order to retrieve symbols
+  spec.add_runtime_dependency 'elftools'
+
+  # Needed for generic in-memory cachine
+  spec.add_runtime_dependency 'lru_redux'
+
+  # Pinned on 3.1.1 as it is the version supported by our Ruby 3.3.8 dependency to avoid this issue https://github.com/rubygems/rubygems/issues/7657#issuecomment-2521083323
+  # When Ruby ships with `gem --version` 3.6.0 or higher by default this can be removed
+  spec.add_runtime_dependency 'stringio', '3.1.1'
+
+  # Needed for caching validation
+  spec.add_runtime_dependency 'parallel'
+
+  # Standard libraries: https://www.ruby-lang.org/en/news/2023/12/25/ruby-3-3-0-released/
+  %w[
+    abbrev
+    base64
+    benchmark
+    bigdecimal
+    csv
+    drb
+    fiddle
+    getoptlong
+    mutex_m
+    ostruct
+    rinda
+    syslog
+  ].each do |library|
+    spec.add_runtime_dependency library
+  end
 end

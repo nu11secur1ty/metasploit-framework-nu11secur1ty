@@ -38,7 +38,8 @@ class MetasploitModule < Msf::Auxiliary
           [ 'GET_TGS', { 'Description' => 'Request a Ticket-Granting-Service (TGS)' } ],
           [ 'GET_HASH', { 'Description' => 'Request a TGS to recover the NTLM hash' } ]
         ],
-        'DefaultAction' => 'GET_TGT'
+        'DefaultAction' => 'GET_TGT',
+        'AKA' => ['PKINIT']
       )
     )
 
@@ -47,7 +48,7 @@ class MetasploitModule < Msf::Auxiliary
         OptString.new('DOMAIN', [ false, 'The Fully Qualified Domain Name (FQDN). Ex: mydomain.local' ]),
         OptString.new('USERNAME', [ false, 'The domain user' ]),
         OptString.new('PASSWORD', [ false, 'The domain user\'s password' ]),
-        OptPath.new('CERT_FILE', [ false, 'The PKCS12 (.pfx) certificate file to authenticate with' ]),
+        OptPkcs12Cert.new('CERT_FILE', [ false, 'The PKCS12 (.pfx) certificate file to authenticate with' ]),
         OptString.new('CERT_PASSWORD', [ false, 'The certificate file\'s password' ]),
         OptString.new(
           'NTHASH', [
@@ -75,7 +76,7 @@ class MetasploitModule < Msf::Auxiliary
           ],
           conditions: %w[ACTION == GET_TGS]
         ),
-        OptPath.new(
+        OptKerberosCredentialCache.new(
           'Krb5Ccname', [
             false,
             'The Kerberos TGT to use when requesting the service ticket. If unset, the database will be checked'
@@ -90,12 +91,8 @@ class MetasploitModule < Msf::Auxiliary
 
   def validate_options
     if datastore['CERT_FILE'].present?
-      certificate = File.read(datastore['CERT_FILE'])
-      begin
-        @pfx = OpenSSL::PKCS12.new(certificate, datastore['CERT_PASSWORD'] || '')
-      rescue OpenSSL::PKCS12::PKCS12Error => e
-        fail_with(Failure::BadConfig, "Unable to parse certificate file (#{e})")
-      end
+      pkcs12_storage = Msf::Exploit::Remote::Pkcs12::Storage.new(framework: framework, framework_module: self)
+      @pfx = pkcs12_storage.read_pkcs12_cert_path(datastore['CERT_FILE'], datastore['CERT_PASSWORD'], workspace: workspace)[:value]
 
       if datastore['USERNAME'].blank? && datastore['DOMAIN'].present?
         fail_with(Failure::BadConfig, 'Domain override provided but no username override provided (must provide both or neither)')
@@ -141,7 +138,7 @@ class MetasploitModule < Msf::Auxiliary
   def run
     validate_options
 
-    send("action_#{action.name.downcase}")
+    result = send("action_#{action.name.downcase}")
 
     report_service(
       host: rhost,
@@ -150,6 +147,8 @@ class MetasploitModule < Msf::Auxiliary
       name: 'kerberos',
       info: "Module: #{fullname}, KDC for domain #{@realm}"
     )
+
+    result
   rescue ::Rex::ConnectionError => e
     elog('Connection error', error: e)
     fail_with(Failure::Unreachable, e.message)
@@ -275,6 +274,7 @@ class MetasploitModule < Msf::Auxiliary
     print_good("Found NTLM hash for #{@username}: #{ntlm_hash}")
 
     report_ntlm(ntlm_hash)
+    ntlm_hash
   end
 
   def report_ntlm(hash)

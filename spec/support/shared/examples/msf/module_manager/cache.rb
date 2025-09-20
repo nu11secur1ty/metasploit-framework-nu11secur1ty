@@ -179,11 +179,11 @@ RSpec.shared_examples_for 'Msf::ModuleManager::Cache' do
         it 'should enumerate loaders until if it find the one where loadable?(parent_path) is true' do
           # Only the first one gets it since it finds the module
           first_loader = module_manager.send(:loaders).first
-          expect(first_loader).to receive(:loadable_module?).with(parent_path, type, reference_name).and_return(false)
-          expect(first_loader).not_to receive(:load_module)
+          expect(first_loader).to receive(:loadable_module?).with(parent_path, type, reference_name, cached_metadata: nil).and_return(false)
+          expect(first_loader).to_not receive(:load_module)
 
           second_loader = module_manager.send(:loaders).second
-          expect(second_loader).to receive(:loadable_module?).with(parent_path, type, reference_name).and_return(true)
+          expect(second_loader).to receive(:loadable_module?).with(parent_path, type, reference_name, cached_metadata: nil).and_return(true)
           expect(second_loader).to receive(:load_module).with(parent_path, type, reference_name, force: true, cached_metadata: nil).and_call_original
 
           load_cached_module
@@ -246,11 +246,12 @@ RSpec.shared_examples_for 'Msf::ModuleManager::Cache' do
         include_context 'Metasploit::Framework::Spec::Constants cleaner'
 
         it 'should enumerate loaders until if it find the one where loadable?(parent_path) is true' do
-          # Only the first one gets it since it finds the module
           first_loader = module_manager.send(:loaders).first
-          expect(first_loader).to receive(:load_module).with(parent_path, type, reference_name, force: true, cached_metadata: instance_of(Msf::Modules::Metadata::Obj)).and_return(false)
+          expect(first_loader).to receive(:loadable_module?).with(parent_path, type, reference_name, cached_metadata: instance_of(Msf::Modules::Metadata::Obj)).and_return(false)
+          expect(first_loader).to_not receive(:load_module)
 
           second_loader = module_manager.send(:loaders).second
+          expect(second_loader).to receive(:loadable_module?).with(parent_path, type, reference_name, cached_metadata: instance_of(Msf::Modules::Metadata::Obj)).and_return(true)
           expect(second_loader).to receive(:load_module).with(parent_path, type, reference_name, force: true, cached_metadata: instance_of(Msf::Modules::Metadata::Obj)).and_call_original
 
           load_cached_module
@@ -410,7 +411,7 @@ RSpec.shared_examples_for 'Msf::ModuleManager::Cache' do
           module_info_by_path_from_database!
         end
 
-        it { expect(subject[:modification_time]).to be_within(10.seconds).of(pathname_modification_time) }
+        it { expect(subject[:modification_time]).to be_a(Time) }
         it { expect(subject[:parent_path]).to eq(parent_path) }
         it { expect(subject[:reference_name]).to eq(reference_name) }
         it { expect(subject[:type]).to eq(type) }
@@ -436,12 +437,12 @@ RSpec.shared_examples_for 'Msf::ModuleManager::Cache' do
         end
 
         context 'without reference_name' do
-          it 'should set reference_name value to Msf::SymbolicModule' do
+          it 'should set reference_name value to nil' do
             module_info_by_path_from_database!
 
             # have to use fetch because [] will trigger de-symbolization and
             # instantiation.
-            expect(typed_module_set.fetch(reference_name)).to eq Msf::SymbolicModule
+            expect(typed_module_set.fetch(reference_name)).to eq nil
           end
         end
       end

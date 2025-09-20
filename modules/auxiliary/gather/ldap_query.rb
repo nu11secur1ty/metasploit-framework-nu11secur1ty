@@ -7,6 +7,7 @@ class MetasploitModule < Msf::Auxiliary
 
   include Msf::Exploit::Remote::LDAP
   include Msf::Exploit::Remote::LDAP::Queries
+  include Msf::OptionalSession::LDAP
   require 'json'
   require 'yaml'
 
@@ -63,7 +64,7 @@ class MetasploitModule < Msf::Auxiliary
       OptString.new('BASE_DN', [false, 'LDAP base DN if you already have it']),
       OptPath.new('QUERY_FILE_PATH', [false, 'Path to the JSON or YAML file to load and run queries from'], conditions: %w[ACTION == RUN_QUERY_FILE]),
       OptString.new('QUERY_FILTER', [false, 'Filter to send to the target LDAP server to perform the query'], conditions: %w[ACTION == RUN_SINGLE_QUERY]),
-      OptString.new('QUERY_ATTRIBUTES', [false, 'Comma seperated list of attributes to retrieve from the server'], conditions: %w[ACTION == RUN_SINGLE_QUERY])
+      OptString.new('QUERY_ATTRIBUTES', [false, 'Comma separated list of attributes to retrieve from the server'], conditions: %w[ACTION == RUN_SINGLE_QUERY])
     ])
   end
 
@@ -128,18 +129,15 @@ class MetasploitModule < Msf::Auxiliary
     ldap_connect do |ldap|
       validate_bind_success!(ldap)
 
-      if (base_dn = datastore['BASE_DN'])
-        print_status("User-specified base DN: #{base_dn}")
+      if datastore['BASE_DN'].blank?
+        fail_with(Failure::UnexpectedReply, "Couldn't discover base DN!") unless ldap.base_dn
+        base_dn = ldap.base_dn
+        print_status("#{ldap.peerinfo} Discovered base DN: #{base_dn}")
       else
-        print_status('Discovering base DN automatically')
-
-        unless (base_dn = discover_base_dn(ldap))
-          fail_with(Failure::UnexpectedReply, "Couldn't discover base DN!")
-        end
+        base_dn = datastore['BASE_DN']
       end
 
-      schema_dn = find_schema_dn(ldap, base_dn)
-
+      schema_dn = ldap.schema_dn
       case action.name
       when 'RUN_QUERY_FILE'
         unless datastore['QUERY_FILE_PATH']
@@ -152,25 +150,24 @@ class MetasploitModule < Msf::Auxiliary
           fail_with(Failure::BadConfig, "No queries loaded from #{datastore['QUERY_FILE_PATH']}!")
         end
 
-        run_queries_from_file(ldap, parsed_queries, datastore['OUTPUT_FORMAT'])
+        run_queries_from_file(ldap, parsed_queries, schema_dn, datastore['OUTPUT_FORMAT'])
         return
       when 'RUN_SINGLE_QUERY'
-        unless datastore['QUERY_FILTER'] && datastore['QUERY_ATTRIBUTES']
-          fail_with(Failure::BadConfig, 'When using the RUN_SINGLE_QUERY action, one must supply the QUERY_FILTER and QUERY_ATTRIBUTE datastore options!')
+        unless datastore['QUERY_FILTER']
+          fail_with(Failure::BadConfig, 'When using the RUN_SINGLE_QUERY action, one must supply the QUERY_FILTER datastore option!')
         end
 
         print_status("Sending single query #{datastore['QUERY_FILTER']} to the LDAP server...")
-        attributes = datastore['QUERY_ATTRIBUTES']
-        if attributes.empty?
-          fail_with(Failure::BadConfig, 'Attributes list is empty as we could not find at least one attribute to filter on!')
+        if datastore['QUERY_ATTRIBUTES'].present?
+          # Split attributes string into an array of attributes, splitting on the comma character.
+          # Also downcase for consistency with rest of the code since LDAP searches aren't case sensitive.
+          attributes = datastore['QUERY_ATTRIBUTES'].downcase.split(',')
+
+          # Strip out leading and trailing whitespace from the attributes before using them.
+          attributes.map(&:strip!)
+        else
+          attributes = nil
         end
-
-        # Split attributes string into an array of attributes, splitting on the comma character.
-        # Also downcase for consistency with rest of the code since LDAP searches aren't case sensitive.
-        attributes = attributes.downcase.split(',')
-
-        # Strip out leading and trailing whitespace from the attributes before using them.
-        attributes.map(&:strip!)
         filter_string = datastore['QUERY_FILTER']
         query_base = base_dn
       else
@@ -198,10 +195,14 @@ class MetasploitModule < Msf::Auxiliary
         print_status("Query returned #{result_count} result#{result_count == 1 ? '' : 's'}.")
       end
     end
-  rescue Rex::ConnectionTimeout
-    fail_with(Failure::Unreachable, "Couldn't reach #{datastore['RHOST']}!")
+  rescue Errno::ECONNRESET
+    fail_with(Failure::Disconnected, 'The connection was reset.')
+  rescue Rex::ConnectionError => e
+    fail_with(Failure::Unreachable, e.message)
+  rescue Rex::Proto::Kerberos::Model::Error::KerberosError => e
+    fail_with(Failure::NoAccess, e.message)
   rescue Net::LDAP::Error => e
-    fail_with(Failure::UnexpectedReply, "Could not query #{datastore['RHOST']}! Error was: #{e.message}")
+    fail_with(Failure::Unknown, "#{e.class}: #{e.message}")
   end
 
   attr_reader :loaded_queries # Queries loaded from the yaml config file

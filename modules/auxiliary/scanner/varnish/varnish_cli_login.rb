@@ -15,32 +15,31 @@ class MetasploitModule < Msf::Auxiliary
 
   def initialize
     super(
-      'Name'           => 'Varnish Cache CLI Login Utility',
-      'Description'    => 'This module attempts to login to the Varnish Cache (varnishd) CLI instance using a bruteforce
+      'Name' => 'Varnish Cache CLI Login Utility',
+      'Description' => 'This module attempts to login to the Varnish Cache (varnishd) CLI instance using a bruteforce
                            list of passwords.',
-      'References'     =>
-        [
-          [ 'OSVDB', '67670' ],
-          [ 'CVE', '2009-2936' ],
-          [ 'EDB', '35581' ],
-          [ 'URL', 'https://www.varnish-cache.org/trac/wiki/CLI' ]
-        ],
-      'Author'         =>
-        [
-          'aushack', #original module
-          'h00die <mike@shorebreaksecurity.com>' #updates and standardizations
-        ],
-      'License'        => MSF_LICENSE
+      'References' => [
+        [ 'OSVDB', '67670' ],
+        [ 'CVE', '2009-2936' ],
+        [ 'EDB', '35581' ],
+        [ 'URL', 'https://www.varnish-cache.org/trac/wiki/CLI' ]
+      ],
+      'Author' => [
+        'aushack', # original module
+        'h00die <mike@shorebreaksecurity.com>' # updates and standardizations
+      ],
+      'License' => MSF_LICENSE
     )
 
     register_options(
       [
         Opt::RPORT(6082),
-        OptPath.new('PASS_FILE',  [ true, 'File containing passwords, one per line',
-          File.join(Msf::Config.data_directory, 'wordlists', 'unix_passwords.txt') ])
-      ])
-
-    deregister_options('PASSWORD_SPRAY')
+        OptPath.new('PASS_FILE', [
+          true, 'File containing passwords, one per line',
+          File.join(Msf::Config.data_directory, 'wordlists', 'unix_passwords.txt')
+        ])
+      ]
+    )
 
     # We don't currently support an auth mechanism that uses usernames, so we'll ignore any
     # usernames that are passed in.
@@ -70,14 +69,15 @@ class MetasploitModule < Msf::Auxiliary
       username: '<BLANK>'
     )
     scanner = Metasploit::Framework::LoginScanner::VarnishCLI.new(
-      host: ip,
-      port: rport,
-      cred_details: cred_collection,
-      stop_on_success: true,
-      connection_timeout: 10,
-      framework: framework,
-      framework_module: self,
-
+      configure_login_scanner(
+        host: ip,
+        port: rport,
+        cred_details: cred_collection,
+        stop_on_success: true,
+        connection_timeout: 10,
+        framework: framework,
+        framework_module: self
+      )
     )
     scanner.scan! do |result|
       credential_data = result.to_h

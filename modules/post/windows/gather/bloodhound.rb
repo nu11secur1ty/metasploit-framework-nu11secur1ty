@@ -25,7 +25,7 @@ class MetasploitModule < Msf::Post
         'Notes' => {
           'AKA' => ['sharphound'],
           'SideEffects' => [ARTIFACTS_ON_DISK],
-          'Stability' => [],
+          'Stability' => [CRASH_SAFE],
           'Reliability' => []
         }
       )
@@ -46,7 +46,7 @@ class MetasploitModule < Msf::Post
       # OptString.new('LDAPUsername', [false, 'User to connect to LDAP with', 'Default']),
       # OptString.new('LDAPPassword', [false, 'Password for user you are connecting to LDAP with']),
       # OptString.new('DisableKerbSigning', [false, 'Disables Kerberos Signing on requests', false]),
-      OptPath.new('OutputDirectory', [false, 'Folder to write json output to.  Default is Windows temp']),
+      OptString.new('OutputDirectory', [false, 'Folder to write json output to.  Default is Windows temp']),
       OptEnum.new('Method', [true, 'Method to run Sharphound with', 'download', ['download', 'disk']]),
       OptBool.new('EncryptZip', [false, 'If the zip should be password protected', true]),
       OptBool.new('NoSaveCache', [false, 'Dont save the cache file to disk', true]),
@@ -185,7 +185,10 @@ class MetasploitModule < Msf::Post
       if datastore['EncryptZip']
         print_good "Zip password: #{zip_pass}"
         report_note(host: session,
-                    data: "Bloodhound/Sharphound loot #{p} password is #{zip_pass}",
+                    data: {
+                      loot: p,
+                      password: zip_pass
+                    },
                     type: 'Sharphound Zip Password')
       end
       break

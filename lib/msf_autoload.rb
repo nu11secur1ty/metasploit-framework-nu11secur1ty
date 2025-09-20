@@ -35,6 +35,8 @@ class MsfAutoload
         'PowerShell'
       elsif basename == 'ui' && abspath.end_with?("#{__dir__}/msf/core/module/ui", "#{__dir__}/msf/core/module/ui.rb", "#{__dir__}/rex/post/ui", "#{__dir__}/rex/post/ui.rb", "#{__dir__}/rex/post/meterpreter/extensions/stdapi/ui.rb")
         'UI'
+      elsif basename == 'mysql' && abspath.end_with?("#{__dir__}/msf/core/exploit/remote/mysql.rb")
+        'MYSQL'
       elsif basename == 'ssh' && abspath.end_with?("#{__dir__}/rex/proto/ssh")
         'Ssh'
       elsif basename == 'http' && abspath.end_with?("#{__dir__}/rex/proto/http")
@@ -42,8 +44,8 @@ class MsfAutoload
       elsif basename == 'rftransceiver' && abspath.end_with?("#{__dir__}/rex/post/hwbridge/ui/console/command_dispatcher/rftransceiver.rb")
         'RFtransceiver'
       else
-       super
-    end
+        super
+      end
     end
   end
 
@@ -73,7 +75,7 @@ class MsfAutoload
       "#{__dir__}/msf/core/rpc/v10",
       "#{__dir__}/msf/core/payload/osx/x64",
       "#{__dir__}/msf/core/payload/windows/x64",
-      "#{__dir__}/msf/core/payload/linux/x64",
+      # "#{__dir__}/msf/core/payload/linux/x64",
       "#{__dir__}/msf/core/web_services/servlet",
       "#{__dir__}/msf/base",
       "#{__dir__}/rex/parser/fs"
@@ -143,7 +145,7 @@ class MsfAutoload
       'dcerpc_lsa' => 'DCERPC_LSA',
       'wdbrpc_client' => 'WDBRPC_Client',
       'sunrpc' => 'SunRPC',
-      'mysql' => 'MYSQL',
+      'mysql' => 'MySQL',
       'ldap' => 'LDAP',
       'sqli' => 'SQLi',
       'dhcp_server' => 'DHCPServer',
@@ -187,6 +189,7 @@ class MsfAutoload
       'cli' => 'CLI',
       'sqlitei' => 'SQLitei',
       'mysqli' => 'MySQLi',
+      'postgresql' => 'PostgreSQL',
       'postgresqli' => 'PostgreSQLi',
       'ssh' => 'SSH',
       'winrm' => 'WinRM',
@@ -294,6 +297,14 @@ class MsfAutoload
       'appapi' => 'AppApi',
       'uds_errors' => 'UDSErrors',
       'smb_hash_capture' => 'SMBHashCapture',
+      'rex_ntlm' => 'RexNTLM',
+      'teamcity' => 'TeamCity',
+      'nist_sp_800_38f' => 'NIST_SP_800_38f',
+      'nist_sp_800_108' => 'NIST_SP_800_108',
+      'sccm' => 'SCCM',
+      'pfsense' => 'PfSense',
+      'opnsense' => 'OPNSense',
+      'pgadmin' => 'PgAdmin',
     }
   end
 
@@ -334,8 +345,13 @@ end
 autoload :Faker, 'faker'
 autoload :BinData, 'bindata'
 autoload :RubySMB, 'ruby_smb'
+autoload :MetasploitPayloads, 'metasploit-payloads'
+autoload :PacketFu, 'packetfu'
+autoload :DidYouMean, 'did_you_mean'
 
 require 'rexml/document'
+# Load IO#expect moneypatch
+require 'expect'
 
 # XXX: Should be removed once the `lib/metasploit` folder is loaded by Zeitwerk
 require 'metasploit/framework/hashes'

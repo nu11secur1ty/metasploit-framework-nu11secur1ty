@@ -28,7 +28,7 @@ class MetasploitModule < Msf::Post
         'Platform' => [ 'win' ],
         'SessionTypes' => [ 'meterpreter' ],
         'Notes' => {
-          'Stability' => [],
+          'Stability' => [CRASH_SAFE],
           'Reliability' => [],
           'SideEffects' => []
         },
@@ -68,7 +68,7 @@ class MetasploitModule < Msf::Post
       #  enumerate all processes to find the one that we're are currently executing as,
       #  and then fetch the architecture attribute of that process by doing ["arch"]
       #  to check if it is an 32bits process or not.
-      if session.sys.process.each_process.find { |i| i['pid'] == pid } ['arch'] == 'x86'
+      if session.sys.process.each_process.find { |i| i['pid'] == pid }['arch'] == 'x86'
         addr = [mem].pack('V')
         len = [data.length].pack('V')
 
@@ -100,7 +100,7 @@ class MetasploitModule < Msf::Post
   end
 
   def key_crafter(config)
-    if (!config['SessionP'].empty? && !config['SessionP'].nil?)
+    if !config['SessionP'].empty? && !config['SessionP'].nil?
       s1 = config['SessionP']
       s1 += s1 while s1.length < 20
       key_space = [s1.upcase, s1.upcase, s1.downcase, s1.downcase]
@@ -127,7 +127,7 @@ class MetasploitModule < Msf::Post
         key = key[0..-2].insert(0, key[-1])
         h = key.index(ct[i + 1])
         key = key[0..-2].insert(0, key[-1])
-        next if (l == -1 || h == -1)
+        next if l == -1 || h == -1
 
         pt << (16 * h + l)
       end

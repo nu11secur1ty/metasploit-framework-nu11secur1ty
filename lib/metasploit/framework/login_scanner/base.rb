@@ -16,7 +16,7 @@ module Metasploit
           #   @return [Object] The framework instance object
           attr_accessor :framework
           # @!attribute framework_module
-          #   @return [Object] The framework module caller, if availale
+          #   @return [Object] The framework module caller, if available
           attr_accessor :framework_module
           # @!attribute connection_timeout
           #   @return [Integer] The timeout in seconds for a single SSH connection
@@ -45,6 +45,9 @@ module Metasploit
           # @!attribute bruteforce_speed
           #   @return [Integer] The desired speed, with 5 being 'fast' and 0 being 'slow.'
           attr_accessor :bruteforce_speed
+          # @!attribute sslkeylogfile
+          #   @return [String] The SSL key log file path
+          attr_accessor :sslkeylogfile
 
           validates :connection_timeout,
                     presence: true,
@@ -91,7 +94,7 @@ module Metasploit
           # Attempt a single login against the service with the given
           # {Credential credential}.
           #
-          # @param credential [Credential] The credential object to attmpt to
+          # @param credential [Credential] The credential object to attempt to
           #   login with
           # @return [Result] A Result object indicating success or failure
           # @abstract Protocol-specific scanners must implement this for their
@@ -252,7 +255,15 @@ module Metasploit
                 end
               end
             rescue => e
-              elog('Attempt may not yield a result', error: e)
+              if framework_module
+                prefix = framework_module.respond_to?(:peer) ? "#{framework_module.peer} - LOGIN FAILED:" : "LOGIN FAILED:"
+                framework_module.print_warning("#{prefix} #{credential.to_h} - Unhandled error - scan may not produce correct results: #{e.message} - #{e.backtrace}")
+              end
+              elog("Scan Error: #{e.message}", error: e)
+              consecutive_error_count += 1
+              total_error_count += 1
+              break if consecutive_error_count >= 3
+              break if total_error_count >= 10
             end
             nil
           end

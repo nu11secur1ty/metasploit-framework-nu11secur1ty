@@ -15,6 +15,8 @@ class MetasploitModule < Msf::Auxiliary
   include Msf::Auxiliary::CommandShell
   include Msf::Auxiliary::Scanner
   include Msf::Exploit::Remote::Kerberos::Ticket::Storage
+  include Msf::Sessions::CreateSessionOptions
+  include Msf::Auxiliary::ReportSummary
 
   def initialize
     super(
@@ -32,8 +34,6 @@ class MetasploitModule < Msf::Auxiliary
       ],
       'License' => MSF_LICENSE
     )
-
-    deregister_options('PASSWORD_SPRAY')
   end
 
   def run
@@ -50,7 +50,7 @@ class MetasploitModule < Msf::Auxiliary
 
     kerberos_authenticator_factory = nil
     if datastore['Winrm::Auth'] == Msf::Exploit::Remote::AuthOption::KERBEROS
-      kerberos_authenticator_factory = -> (username, password, realm) do
+      kerberos_authenticator_factory = ->(username, password, realm) do
         Msf::Exploit::Remote::Kerberos::ServiceAuthenticator::HTTP.new(
           host: datastore['DomainControllerRhost'],
           hostname: datastore['Winrm::Rhostname'],
@@ -73,17 +73,19 @@ class MetasploitModule < Msf::Auxiliary
     keep_connection_alive = datastore['CreateSession']
 
     scanner = Metasploit::Framework::LoginScanner::WinRM.new(
-      host: ip,
-      port: rport,
-      proxies: datastore['Proxies'],
-      cred_details: cred_collection,
-      stop_on_success: datastore['STOP_ON_SUCCESS'],
-      bruteforce_speed: datastore['BRUTEFORCE_SPEED'],
-      connection_timeout: 10,
-      framework: framework,
-      framework_module: self,
-      kerberos_authenticator_factory: kerberos_authenticator_factory,
-      keep_connection_alive: keep_connection_alive
+      configure_login_scanner(
+        host: ip,
+        port: rport,
+        proxies: datastore['Proxies'],
+        cred_details: cred_collection,
+        stop_on_success: datastore['STOP_ON_SUCCESS'],
+        bruteforce_speed: datastore['BRUTEFORCE_SPEED'],
+        connection_timeout: 10,
+        framework: framework,
+        framework_module: self,
+        kerberos_authenticator_factory: kerberos_authenticator_factory,
+        keep_connection_alive: keep_connection_alive
+      )
     )
 
     scanner.scan! do |result|

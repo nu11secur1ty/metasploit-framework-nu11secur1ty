@@ -58,11 +58,11 @@ private
     if opts[:stageless] == true || opts[:null_session_guid] == true
       session_guid = "\x00" * 16
     else
-      session_guid = [SecureRandom.uuid.gsub(/-/, '')].pack('H*')
+      session_guid = [SecureRandom.uuid.gsub('-', '')].pack('H*')
     end
     session_data = [
       0,                  # comms socket, patched in by the stager
-      exit_func,          # exit function identifer
+      exit_func,          # exit function identifier
       opts[:expiration],  # Session expiry
       uuid,               # the UUID
       session_guid,        # the Session GUID

@@ -73,7 +73,6 @@ module Metasploit
         # @see Rex::Socket::Tcp
         # @see Rex::Socket::Tcp.create
         def connect(global = true, opts={})
-
           dossl = false
           if(opts.has_key?('SSL'))
             dossl = opts['SSL']
@@ -90,6 +89,7 @@ module Metasploit
               'SSL'           =>  dossl,
               'SSLVersion'    =>  opts['SSLVersion'] || ssl_version,
               'SSLVerifyMode' =>  opts['SSLVerifyMode'] || ssl_verify_mode,
+              'SSLKeyLogFile' =>  opts['SSLKeyLogFile'] || sslkeylogfile,
               'SSLCipher'     =>  opts['SSLCipher'] || ssl_cipher,
               'Proxies'       => proxies,
               'Timeout'       => (opts['ConnectTimeout'] || connection_timeout || 10).to_i,

@@ -35,7 +35,12 @@ class MetasploitModule < Msf::Auxiliary
           ['WRITE_REGISTERS', { 'Description' => 'Write words to several registers' } ],
           ['READ_ID', { 'Description' => 'Read device id' } ]
         ],
-        'DefaultAction' => 'READ_HOLDING_REGISTERS'
+        'DefaultAction' => 'READ_HOLDING_REGISTERS',
+        'Notes' => {
+          'Reliability' => UNKNOWN_RELIABILITY,
+          'Stability' => UNKNOWN_STABILITY,
+          'SideEffects' => UNKNOWN_SIDE_EFFECTS
+        }
       )
     )
 
@@ -412,7 +417,7 @@ class MetasploitModule < Msf::Auxiliary
         obj_cnt -= 1
         obj_id_pos = obj_id_pos + obj_len + 2
         if obj_id_pos > max_ref_size
-          print_error('Out of bounds reference occured whilst processing READ ID operation! Check sender data!')
+          print_error('Out of bounds reference occurred whilst processing READ ID operation! Check sender data!')
           break
         end
         break unless obj_cnt > 0

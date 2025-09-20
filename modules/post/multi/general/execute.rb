@@ -14,7 +14,12 @@ class MetasploitModule < Msf::Post
         'License' => MSF_LICENSE,
         'Author' => [ 'hdm' ],
         'Platform' => %w[linux osx unix win],
-        'SessionTypes' => [ 'shell', 'meterpreter' ]
+        'SessionTypes' => [ 'shell', 'meterpreter' ],
+        'Notes' => {
+          'Stability' => [CRASH_SAFE],
+          'SideEffects' => [],
+          'Reliability' => []
+        }
       )
     )
     register_options(
@@ -27,6 +32,6 @@ class MetasploitModule < Msf::Post
   def run
     print_status("Executing #{datastore['COMMAND']} on #{session.inspect}...")
     res = cmd_exec(datastore['COMMAND'])
-    print_status("Response: #{res}")
+    print_status("Response: \n#{res}")
   end
 end

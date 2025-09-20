@@ -272,20 +272,28 @@ class Core
   def cmd_banner(*args)
     banner  = "%cya" + Banner.to_s + "%clr\n\n"
 
-    stats       = framework.stats
-    version     = "%yelmetasploit v#{Metasploit::Framework::VERSION}%clr",
-    exp_aux_pos = "#{stats.num_exploits} exploits - #{stats.num_auxiliary} auxiliary - #{stats.num_post} post",
-    pay_enc_nop = "#{stats.num_payloads} payloads - #{stats.num_encoders} encoders - #{stats.num_nops} nops",
-    eva         = "#{stats.num_evasion} evasion",
-    padding     = 48
+    stats = framework.stats
+    version = "%yelmetasploit v#{Metasploit::Framework::VERSION}%clr",
+    stats_line_1 = [
+      "#{stats.num_exploits.to_fs(:delimited)} exploits",
+      "#{stats.num_auxiliary.to_fs(:delimited)} auxiliary",
+      "#{stats.num_payloads.to_fs(:delimited)} payloads"
+    ].join(' - ')
+    stats_line_2 = [
+      "#{stats.num_post.to_fs(:delimited)} post",
+      "#{stats.num_encoders.to_fs(:delimited)} encoders",
+      "#{stats.num_nops.to_fs(:delimited)} nops",
+      "#{stats.num_evasion.to_fs(:delimited)} evasion"
+    ].join(' - ')
+    padding = 54
 
     banner << ("       =[ %-#{padding+8}s]\n" % version)
-    banner << ("+ -- --=[ %-#{padding}s]\n" % exp_aux_pos)
-    banner << ("+ -- --=[ %-#{padding}s]\n" % pay_enc_nop)
-    banner << ("+ -- --=[ %-#{padding}s]\n" % eva)
+    banner << ("+ -- --=[ %-#{padding}s]\n" % stats_line_1)
+    banner << ("+ -- --=[ %-#{padding}s]\n" % stats_line_2)
 
     banner << "\n"
     banner << Rex::Text.wordwrap('Metasploit Documentation: https://docs.metasploit.com/', indent = 0, cols = 60)
+    banner << Rex::Text.wordwrap('The Metasploit Framework is a Rapid7 Open Source Project', indent = 0, cols = 60)
 
     # Display the banner
     print_line(banner)
@@ -1009,7 +1017,7 @@ class Core
 
     # Parse any extra options that should be passed to the plugin
     args.each { |opt|
-      k, v = opt.split(/\=/)
+      k, v = opt.split('=')
 
       opts[k] = v if (k and v)
     }
@@ -1082,7 +1090,7 @@ class Core
       tabs += tab_complete_filenames(str,words)
     end
 
-    return tabs.map{|e| e.sub(/\.rb/, '')} - framework.plugins.map(&:name)
+    return tabs.map{|e| e.sub('.rb', '')} - framework.plugins.map(&:name)
   end
 
   def cmd_route_help
@@ -1235,7 +1243,7 @@ class Core
           if (route.comm.kind_of?(Msf::Session))
             gw = "Session #{route.comm.sid}"
           else
-            gw = route.comm.name.split(/::/)[-1]
+            gw = route.comm.name.split('::')[-1]
           end
 
           tbl_ipv4 << [ route.subnet, route.netmask, gw ] if Rex::Socket.is_ipv4?(route.netmask)
@@ -1350,7 +1358,9 @@ class Core
       # Save the framework's datastore
       begin
         framework.save_config
-        driver.framework.dns_resolver.save_config
+        if driver.framework.dns_resolver
+          driver.framework.dns_resolver.save_config
+        end
 
         if active_module
           active_module.save_config
@@ -1419,10 +1429,14 @@ class Core
     color = driver.output.config[:color]
 
     if args[0] == "off"
-      driver.init_ui(driver.input, Rex::Ui::Text::Output::Stdio.new)
+      stdout = Rex::Ui::Text::Output::Stdio.new
+      driver.init_ui(driver.input, stdout)
+      active_module.init_ui(driver.input, stdout) if defined?(active_module) && active_module
       msg = "Spooling is now disabled"
     else
-      driver.init_ui(driver.input, Rex::Ui::Text::Output::Tee.new(args[0]))
+      stdout = Rex::Ui::Text::Output::Tee.new(args[0])
+      driver.init_ui(driver.input, stdout)
+      active_module.init_ui(driver.input, stdout) if defined?(active_module) && active_module
       msg = "Spooling to file #{args[0]}..."
     end
 
@@ -1600,7 +1614,8 @@ class Core
           end
 
           begin
-            if session.type == 'meterpreter'
+            case session.type.downcase
+            when 'meterpreter'
               # If session.sys is nil, dont even try..
               unless session.sys
                 print_error("Session #{s} does not have stdapi loaded, skipping...")
@@ -1617,12 +1632,14 @@ class Core
                 print_line(data) unless data.blank?
               rescue ::Rex::Post::Meterpreter::RequestError
                 print_error("Failed: #{$!.class} #{$!}")
-              rescue Rex::TimeoutError
+              rescue ::Rex::TimeoutError
                 print_error("Operation timed out. Timeout currently #{session.response_timeout} seconds, you can configure this with %grnsessions -c <cmd> --timeout <value>%clr")
               end
-            elsif session.type == 'shell' || session.type == 'powershell'
+            when 'shell', 'powershell'
               output = session.shell_command(cmd)
               print_line(output) if output
+            when 'mssql', 'postgresql', 'mysql'
+              session.run_cmd(cmd, driver.output)
             end
           ensure
             # Restore timeout for each session
@@ -2072,7 +2089,7 @@ class Core
     print_line "datastore.  Use -g to operate on the global datastore."
     print_line
     print_line "If setting a PAYLOAD, this command can take an index from `show payloads'."
-    print @@set_opts.usage if framework.features.enabled?(Msf::FeatureManager::DATASTORE_FALLBACKS)
+    print @@set_opts.usage
     print_line
   end
 
@@ -2094,7 +2111,7 @@ class Core
       elsif args[0] == '-a'
         args.shift
         append = true
-      elsif (args[0] == '-c' || args[0] == '--clear') && framework.features.enabled?(Msf::FeatureManager::DATASTORE_FALLBACKS)
+      elsif (args[0] == '-c' || args[0] == '--clear')
         args.shift
         clear = true
       else
@@ -2262,7 +2279,7 @@ class Core
     print_line "Usage: setg [option] [value]"
     print_line
     print_line "Exactly like set -g, set a value in the global datastore."
-    print @@setg_opts.usage if framework.features.enabled?(Msf::FeatureManager::DATASTORE_FALLBACKS)
+    print @@setg_opts.usage
     print_line
   end
 
@@ -2424,83 +2441,18 @@ class Core
   end
 
   def cmd_unset_help
-    if framework.features.enabled?(Msf::FeatureManager::DATASTORE_FALLBACKS)
-      print_line "Usage: unset [-g] var1 var2 var3 ..."
-      print_line
-      print_line "The unset command is used to unset one or more variables."
-      print_line "To flush all entires, specify 'all' as the variable name."
-      print_line "With -g, operates on global datastore variables."
-      print_line
-    else
-      print_line "Usage: unset [options] var1 var2 var3 ..."
-      print_line
-      print_line "The unset command is used to unset one or more variables which have been set by the user."
-      print_line "To update all entries, specify 'all' as the variable name."
-      print @@unset_opts.usage
-      print_line
-    end
+    print_line "Usage: unset [-g] var1 var2 var3 ..."
+    print_line
+    print_line "The unset command is used to unset one or more variables."
+    print_line "To flush all entries, specify 'all' as the variable name."
+    print_line "With -g, operates on global datastore variables."
+    print_line
   end
 
   #
   # Unsets a value if it's been set.
   #
   def cmd_unset(*args)
-    if framework.features.enabled?(Msf::FeatureManager::DATASTORE_FALLBACKS)
-      return cmd_unset_with_fallbacks(*args)
-    end
-
-    # Figure out if these are global variables
-    global = false
-
-    if (args[0] == '-g')
-      args.shift
-      global = true
-    end
-
-    # Determine which data store we're operating on
-    if (active_module and global == false)
-      datastore = active_module.datastore
-    else
-      datastore = framework.datastore
-    end
-
-    # No arguments?  No cookie.
-    if (args.length == 0)
-      cmd_unset_help
-      return false
-    end
-
-    # If all was specified, then flush all of the entries
-    if args[0] == 'all'
-      print_line("Flushing datastore...")
-
-      # Re-import default options into the module's datastore
-      if (active_module and global == false)
-        active_module.import_defaults
-      # Or simply clear the global datastore
-      else
-        datastore.clear
-      end
-
-      return true
-    end
-
-    while ((val = args.shift))
-      if (driver.on_variable_unset(global, val) == false)
-        print_error("The variable #{val} cannot be unset at this time.")
-        next
-      end
-
-      print_line("Unsetting #{val}...")
-
-      datastore.delete(val)
-    end
-  end
-
-  #
-  # Unsets a value if it's been set, resetting the value back to a default value
-  #
-  def cmd_unset_with_fallbacks(*args)
     if args.include?('-h') || args.include?('--help')
       cmd_unset_help
       return
@@ -2582,7 +2534,7 @@ class Core
     print_line "Usage: unsetg [options] var1 var2 var3 ..."
     print_line
     print_line "Exactly like unset -g, unset global variables, or all"
-    print @@unsetg_opts.usage if framework.features.enabled?(Msf::FeatureManager::DATASTORE_FALLBACKS)
+    print @@unsetg_opts.usage
     print_line
   end
 
@@ -2717,7 +2669,7 @@ class Core
     all_lines.each_with_index do |line, line_num|
       next if (output_mods[:skip] and line_num < output_mods[:skip])
       our_lines << line if (output_mods[:keep] and line_num < output_mods[:keep])
-      # we don't wan't to keep processing if we have a :max and we've reached it already (not counting skips/keeps)
+      # we don't want to keep processing if we have a :max and we've reached it already (not counting skips/keeps)
       break if match_mods[:max] and count >= match_mods[:max]
       if eval statement
         count += 1
@@ -2872,7 +2824,7 @@ class Core
   # from all_lines by supplying the +before+ and/or +after+ parameters which are always positive
   #
   # @param all_lines [Array<String>] An array of all lines being considered for matching
-  # @param line_num [Integer] The line number in all_lines which has satisifed the match
+  # @param line_num [Integer] The line number in all_lines which has satisfied the match
   # @param after [Integer] The number of lines after the match line to include (should always be positive)
   # @param before [Integer] The number of lines before the match line to include (should always be positive)
   # @return [Array<String>] Array of lines including the line at line_num and any +before+ and/or +after+

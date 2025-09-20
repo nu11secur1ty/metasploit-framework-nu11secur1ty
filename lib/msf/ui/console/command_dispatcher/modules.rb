@@ -380,30 +380,33 @@ module Msf
             print_line
             print_line "Keywords:"
             {
-              'adapter'     => 'Modules with a matching adater reference name',
+              'action'      => 'Modules with a matching action name or description',
+              'adapter'     => 'Modules with a matching adapter reference name',
               'aka'         => 'Modules with a matching AKA (also-known-as) name',
-              'author'      => 'Modules written by this author',
               'arch'        => 'Modules affecting this architecture',
+              'att&ck'      => 'Modules with a matching MITRE ATT&CK ID or reference',
+              'author'      => 'Modules written by this author',
               'bid'         => 'Modules with a matching Bugtraq ID',
-              'cve'         => 'Modules with a matching CVE ID',
-              'edb'         => 'Modules with a matching Exploit-DB ID',
               'check'       => 'Modules that support the \'check\' method',
+              'cve'         => 'Modules with a matching CVE ID',
               'date'        => 'Modules with a matching disclosure date',
               'description' => 'Modules with a matching description',
+              'edb'         => 'Modules with a matching Exploit-DB ID',
               'fullname'    => 'Modules with a matching full name',
               'mod_time'    => 'Modules with a matching modification date',
               'name'        => 'Modules with a matching descriptive name',
+              'osvdb'       => 'Modules with a matching OSVDB ID',
               'path'        => 'Modules with a matching path',
               'platform'    => 'Modules affecting this platform',
               'port'        => 'Modules with a matching port',
               'rank'        => 'Modules with a matching rank (Can be descriptive (ex: \'good\') or numeric with comparison operators (ex: \'gte400\'))',
               'ref'         => 'Modules with a matching ref',
               'reference'   => 'Modules with a matching reference',
+              'session_type' => 'Modules with a matching session type (SMB, MySQL, Meterpreter, etc)',
               'stage'       => 'Modules with a matching stage reference name',
               'stager'      => 'Modules with a matching stager reference name',
               'target'      => 'Modules affecting this target',
               'type'        => 'Modules of a specific type (exploit, payload, auxiliary, encoder, evasion, post, or nop)',
-              'action'      => 'Modules with a matching action name or description',
             }.each_pair do |keyword, description|
               print_line "  #{keyword.ljust 17}:  #{description}"
             end
@@ -426,6 +429,7 @@ module Msf
             print_line "  search cve:2009 type:exploit platform:-linux"
             print_line "  search cve:2009 -s name"
             print_line "  search type:exploit -s type -r"
+            print_line "  search att&ck:T1059"
             print_line
           end
 
@@ -543,10 +547,7 @@ module Msf
                   show_child_items = total_children_rows > 1
                   next unless show_child_items
 
-                  # XXX: By default rex-text tables strip preceding whitespace:
-                  #   https://github.com/rapid7/rex-text/blob/1a7b639ca62fd9102665d6986f918ae42cae244e/lib/rex/text/table.rb#L221-L222
-                  #   So use https://en.wikipedia.org/wiki/Non-breaking_space as a workaround for now. A change should exist in Rex-Text to support this requirement
-                  indent = "\xc2\xa0\xc2\xa0\\_ "
+                  indent = "  \\_ "
                   # Note: We still use visual indicators for blank values as it's easier to read
                   # We can't always use a generic formatter/styler, as it would be applied to the 'parent' rows too
                   blank_value = '.'
@@ -596,10 +597,6 @@ module Msf
                   end
                 end
               end
-              if @module_search_results_with_usage_metadata.length == 1 && use
-                used_module = @module_search_results_with_usage_metadata.first[:mod].fullname
-                cmd_use(used_module, true)
-              end
             rescue ArgumentError
               print_error("Invalid argument(s)\n")
               cmd_search_help
@@ -611,11 +608,16 @@ module Msf
               ::File.open(output_file, "wb") { |ofd|
                 ofd.write(tbl.to_csv)
               }
-            else
-              print_line(tbl.to_s)
-              print_module_search_results_usage
+              return true
+            end
 
+            print_line(tbl.to_s)
+            print_module_search_results_usage
+
+            if @module_search_results.length == 1 && use
+              used_module = @module_search_results_with_usage_metadata.first[:mod].fullname
               print_status("Using #{used_module}") if used_module
+              cmd_use(used_module, true)
             end
 
             true
@@ -890,9 +892,12 @@ module Msf
             end
 
             # If any additional datastore values were provided, set these values
-            unless additional_datastore_values.nil?
+            unless additional_datastore_values.nil? || additional_datastore_values.empty?
               mod.datastore.update(additional_datastore_values)
               print_status("Additionally setting #{additional_datastore_values.map { |k,v| "#{k} => #{v}" }.join(", ")}")
+              if additional_datastore_values['TARGET'] && (mod.exploit? || mod.evasion?)
+                mod.import_target_defaults
+              end
             end
 
             # Choose a default payload when the module is used, not run
@@ -901,6 +906,10 @@ module Msf
             elsif dispatcher.respond_to?(:choose_payload)
               chosen_payload = dispatcher.choose_payload(mod)
               print_status("No payload configured, defaulting to #{chosen_payload}") if chosen_payload
+            end
+
+            if framework.features.enabled?(Msf::FeatureManager::DISPLAY_MODULE_ACTION) && mod.respond_to?(:actions) && mod.actions.size > 1
+              print_status "Setting default action %grn#{mod.action.name}%clr - view all #{mod.actions.size} actions with the %grnshow actions%clr command"
             end
 
             mod.init_ui(driver.input, driver.output)
@@ -1044,7 +1053,7 @@ module Msf
           #
           # @param str [String] the string currently being typed before tab was hit
           # @param words [Array<String>] the previously completed words on the command line.  words is always
-          # at least 1 when tab completion has reached this stage since the command itself has been completd
+          # at least 1 when tab completion has reached this stage since the command itself has been completed
 
           def cmd_use_tabs(str, words)
             return [] if words.length > 1
@@ -1095,6 +1104,7 @@ module Msf
               wlog(log_msg)
             end
 
+            self.driver.run_single('reload')
             self.driver.run_single("banner")
           end
 
@@ -1799,6 +1809,7 @@ module Msf
                     ]
                   },
                   'Name' => {
+                    'Strip' => false,
                     'Stylers' => [Msf::Ui::Console::TablePrint::HighlightSubstringStyler.new(search_terms)]
                   },
                   'Check' => {

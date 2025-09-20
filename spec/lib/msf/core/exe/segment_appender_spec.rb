@@ -54,7 +54,7 @@ RSpec.describe Msf::Exe::SegmentAppender do
 
     context 'the generated exe' do
       let(:exe) { Metasm::PE.decode(injector.generate_pe) }
-      it 'should be the propper arch' do
+      it 'should be the proper arch' do
         expect(exe.bitsize).to eq 32
       end
 
@@ -65,7 +65,7 @@ RSpec.describe Msf::Exe::SegmentAppender do
       it 'should have all the right original section names' do
         s_names = []
         exe.sections.collect {|s| s_names << s.name}
-        expect(s_names[0,4]).to eq [".text", ".rdata", ".data", ".rsrc"]
+        expect(s_names[0,4]).to eq [".text", ".rdata", ".data", ".reloc"]
       end
 
       it 'should have the last section set to RWX' do

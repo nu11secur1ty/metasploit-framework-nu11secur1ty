@@ -377,7 +377,7 @@ module Rex
       web_vuln_info[:risk] = 5
       web_vuln_info[:params] = []
       unless @state[:report_item][:parameter].blank?
-        # Acunetix only lists a single paramter...
+        # Acunetix only lists a single parameter...
         web_vuln_info[:params] << [ @state[:report_item][:parameter].to_s, "" ]
       end
       web_vuln_info[:category] = "imported"
@@ -416,7 +416,7 @@ module Rex
       verb,req = headers.cmd_string.split(/\s+/)
       return unless verb
       return unless req
-      path,query_string = req.split(/\?/)[0,2]
+      path,query_string = req.split('?')[0,2]
       return verb,path,query_string
     end
 
